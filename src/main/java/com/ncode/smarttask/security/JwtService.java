@@ -3,11 +3,11 @@ package com.ncode.smarttask.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 
@@ -27,9 +27,7 @@ public class JwtService {
 
         return Jwts.builder()
                 .setSubject(email)
-                .setIssuedAt(
-                        new Date()
-                )
+                .setIssuedAt(new Date())
                 .setExpiration(
                         new Date(
                                 System.currentTimeMillis()
@@ -43,13 +41,25 @@ public class JwtService {
                 .compact();
     }
 
-    // Extract Email
+    // Extract Username
     public String extractUsername(
             String token
     ) {
 
         return extractAllClaims(token)
                 .getSubject();
+    }
+
+    // Validate Token
+    public boolean isTokenValid(
+            String token,
+            String email
+    ) {
+
+        final String username =
+                extractUsername(token);
+
+        return username.equals(email);
     }
 
     // Extract Claims
@@ -69,24 +79,10 @@ public class JwtService {
     // Secret Key
     private Key getSignInKey() {
 
-        byte[] keyBytes =
-                Decoders.BASE64.decode(
-                        secretKey
-                );
-
         return Keys.hmacShaKeyFor(
-                keyBytes
+                secretKey.getBytes(
+                        StandardCharsets.UTF_8
+                )
         );
     }
-    
-    public boolean isTokenValid(
-        String token,
-        String email
-        ) {
-
-        final String username =
-                extractUsername(token);
-
-        return username.equals(email);
-        }
 }

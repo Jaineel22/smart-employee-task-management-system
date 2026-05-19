@@ -29,6 +29,17 @@ public class JwtAuthenticationFilter
     )
             throws ServletException, IOException {
 
+        // Skip JWT for auth APIs
+        if (request.getServletPath()
+                .startsWith("/api/auth")) {
+
+            filterChain.doFilter(
+                    request,
+                    response
+            );
+            return;
+        }
+
         final String authHeader =
                 request.getHeader(
                         "Authorization"
@@ -94,4 +105,4 @@ public class JwtAuthenticationFilter
                 response
         );
     }
-}
+}   
