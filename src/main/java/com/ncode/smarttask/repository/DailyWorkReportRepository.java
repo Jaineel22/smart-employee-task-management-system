@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DailyWorkReportRepository
@@ -20,4 +21,7 @@ public interface DailyWorkReportRepository
     // Reports by date
     List<DailyWorkReport>
     findByReportDate(LocalDate date);
+
+    Optional<DailyWorkReport>
+    findByUserIdAndTaskIdAndReportDate(Long userId, Long taskId, LocalDate reportDate);
 }
