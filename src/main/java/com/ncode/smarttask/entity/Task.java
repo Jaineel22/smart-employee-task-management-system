@@ -1,5 +1,6 @@
 package com.ncode.smarttask.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ncode.smarttask.enums.Priority;
 import com.ncode.smarttask.enums.TaskStatus;
 import jakarta.persistence.*;
@@ -16,6 +17,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({
+        "hibernateLazyInitializer",
+        "handler"
+})
 public class Task {
 
     @Id

@@ -1,6 +1,7 @@
 package com.ncode.smarttask.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ncode.smarttask.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
@@ -18,6 +19,10 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({
+        "hibernateLazyInitializer",
+        "handler"
+})
 public class User {
 
     @Id
@@ -37,7 +42,7 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     private Role role;
-
+        
     @Builder.Default
     private Boolean isActive = true;
 

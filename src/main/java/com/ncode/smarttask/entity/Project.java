@@ -1,6 +1,6 @@
 package com.ncode.smarttask.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ncode.smarttask.enums.ProjectStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,6 +19,10 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({
+        "hibernateLazyInitializer",
+        "handler"
+})
 public class Project {
 
     @Id
@@ -51,7 +55,6 @@ public class Project {
 
     // One project has many tasks
     @OneToMany(mappedBy = "project")
-    @JsonIgnore
     @Builder.Default
     private List<Task> tasks = new ArrayList<>();
 }
