@@ -53,6 +53,7 @@ public class Task {
     // Many tasks belong to one project
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id")
+    @JsonIgnoreProperties({"tasks"})
     private Project project;
 
     // Many tasks assigned to one employee
