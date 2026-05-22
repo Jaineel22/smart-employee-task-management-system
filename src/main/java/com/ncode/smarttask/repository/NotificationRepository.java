@@ -16,6 +16,10 @@ public interface NotificationRepository
     List<Notification>
     findByUserId(Long userId);
 
+        // User notifications ordered by creation time (newest first)
+        List<Notification>
+        findByUserIdOrderByCreatedAtDesc(Long userId);
+
     // Unread notifications
     List<Notification>
     findByUserIdAndIsReadFalse(

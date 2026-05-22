@@ -1,5 +1,6 @@
 package com.ncode.smarttask.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ncode.smarttask.enums.NotificationType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -9,6 +10,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "notifications")
+@JsonIgnoreProperties({
+    "hibernateLazyInitializer",
+    "handler"
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -36,5 +41,11 @@ public class Notification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
+    @JsonIgnoreProperties({
+            "managedProjects",
+            "assignedTasks",
+            "workReports",
+            "notifications"
+    })
     private User user;
 }
