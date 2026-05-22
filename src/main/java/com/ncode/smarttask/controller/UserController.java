@@ -3,6 +3,8 @@ package com.ncode.smarttask.controller;
 import com.ncode.smarttask.dto.UpdateUserRequest;
 import com.ncode.smarttask.entity.User;
 import com.ncode.smarttask.service.UserService;
+
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -48,7 +50,7 @@ public class UserController {
     // Updates user fields — only non-null fields are changed
     @PutMapping("/{id}")
     public ResponseEntity<User> updateUser(@PathVariable Long id,
-                                           @RequestBody UpdateUserRequest request) {
+                                           @Valid @RequestBody UpdateUserRequest request) {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 

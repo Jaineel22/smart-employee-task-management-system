@@ -4,6 +4,8 @@ import com.ncode.smarttask.dto.CreateProjectRequest;
 import com.ncode.smarttask.dto.UpdateProjectRequest;
 import com.ncode.smarttask.entity.Project;
 import com.ncode.smarttask.service.ProjectService;
+
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +23,7 @@ public class ProjectController {
     // POST /api/projects
     // Creates a new project and assigns it to a manager
     @PostMapping
-    public ResponseEntity<Project> createProject(@RequestBody CreateProjectRequest request) {
+    public ResponseEntity<Project> createProject(@Valid @RequestBody CreateProjectRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(projectService.createProject(request));
     }
 

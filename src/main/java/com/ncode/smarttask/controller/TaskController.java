@@ -5,6 +5,8 @@ import com.ncode.smarttask.dto.TaskProgressRequest;
 import com.ncode.smarttask.dto.UpdateTaskRequest;
 import com.ncode.smarttask.entity.Task;
 import com.ncode.smarttask.service.TaskService;
+
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,7 +24,7 @@ public class TaskController {
     // POST /api/tasks
     // Creates a new task and assigns it to an employee inside a project
     @PostMapping
-    public ResponseEntity<Task> createTask(@RequestBody CreateTaskRequest request) {
+    public ResponseEntity<Task> createTask(@Valid @RequestBody CreateTaskRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(taskService.createTask(request));
     }
 
