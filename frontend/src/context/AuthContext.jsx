@@ -13,10 +13,14 @@ export const AuthProvider = ({ children }) => {
     }
   });
 
-  const loginUser = (userData, token) => {
+  // userData is the full flat response from backend:
+  // { token, id, fullName, email, role, department, ... }
+  // We separate token from user fields here.
+  const loginUser = (userData) => {
+    const { token, ...userFields } = userData;
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userFields));
+    setUser(userFields);
   };
 
   const logoutUser = () => {
