@@ -1,4 +1,3 @@
-// empty file
 import axios from 'axios';
 
 const api = axios.create({
@@ -6,7 +5,7 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT token to every request automatically
+// Attach JWT token to every outgoing request
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -18,7 +17,8 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// If backend returns 401, clear token and redirect to login
+// Only redirect to login on real authentication failure (401)
+// Let 400, 404, 500 pass through so pages can show proper error messages
 api.interceptors.response.use(
   (response) => response,
   (error) => {
