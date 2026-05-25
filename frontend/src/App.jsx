@@ -1,22 +1,23 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import ProtectedRoute   from './components/ProtectedRoute';
-import DashboardLayout  from './layouts/DashboardLayout';
-import LoginPage        from './pages/LoginPage';
-import RegisterPage     from './pages/RegisterPage';
-import DashboardPage    from './pages/DashboardPage';
-import ProjectsPage     from './pages/ProjectsPage';
-import TasksPage        from './pages/TasksPage';
-import ReportsPage      from './pages/ReportsPage';
+import ProtectedRoute, { RoleProtectedRoute } from './components/ProtectedRoute';
+import DashboardLayout   from './layouts/DashboardLayout';
+import LoginPage         from './pages/LoginPage';
+import RegisterPage      from './pages/RegisterPage';
+import DashboardPage     from './pages/DashboardPage';
+import ProjectsPage      from './pages/ProjectsPage';
+import TasksPage         from './pages/TasksPage';
+import ReportsPage       from './pages/ReportsPage';
 import NotificationsPage from './pages/NotificationsPage';
-import ProfilePage      from './pages/ProfilePage';
+import ProfilePage       from './pages/ProfilePage';
+import UsersPage         from './pages/UsersPage';
 
 const App = () => (
   <Routes>
-    {/* Public routes */}
+    {/* Public */}
     <Route path="/login"    element={<LoginPage />} />
     <Route path="/register" element={<RegisterPage />} />
 
-    {/* Protected routes — all share DashboardLayout (sidebar + navbar) */}
+    {/* Protected layout — all children require login */}
     <Route
       path="/"
       element={
@@ -25,16 +26,34 @@ const App = () => (
         </ProtectedRoute>
       }
     >
-      <Route index                  element={<Navigate to="/dashboard" replace />} />
-      <Route path="dashboard"       element={<DashboardPage />} />
-      <Route path="projects"        element={<ProjectsPage />} />
-      <Route path="tasks"           element={<TasksPage />} />
-      <Route path="reports"         element={<ReportsPage />} />
-      <Route path="notifications"   element={<NotificationsPage />} />
-      <Route path="profile"         element={<ProfilePage />} />
+      <Route index                element={<Navigate to="/dashboard" replace />} />
+      <Route path="dashboard"     element={<DashboardPage />} />
+
+      {/* MANAGER / ADMIN only */}
+      <Route
+        path="projects"
+        element={
+          <RoleProtectedRoute roles={['MANAGER', 'ADMIN']}>
+            <ProjectsPage />
+          </RoleProtectedRoute>
+        }
+      />
+      <Route
+        path="users"
+        element={
+          <RoleProtectedRoute roles={['MANAGER', 'ADMIN']}>
+            <UsersPage />
+          </RoleProtectedRoute>
+        }
+      />
+
+      {/* All roles */}
+      <Route path="tasks"         element={<TasksPage />} />
+      <Route path="reports"       element={<ReportsPage />} />
+      <Route path="notifications" element={<NotificationsPage />} />
+      <Route path="profile"       element={<ProfilePage />} />
     </Route>
 
-    {/* Catch-all */}
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </Routes>
 );
