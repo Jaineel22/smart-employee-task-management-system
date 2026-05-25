@@ -14,13 +14,33 @@ export const AuthProvider = ({ children }) => {
   });
 
   // userData is the full flat response from backend:
-  // { token, id, fullName, email, role, department, ... }
-  // We separate token from user fields here.
-  const loginUser = (userData) => {
-    const { token, ...userFields } = userData;
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userFields));
-    setUser(userFields);
+  // Accept both flat response and nested response shapes:
+  // Flat:  { token, id, fullName, email, role, department, ... }
+  // Nested: { token, user: { id, fullName, ... } }
+  const loginUser = (resp) => {
+    console.log('Auth login response:', resp);
+    let token = resp?.token;
+    let userFields = null;
+
+    if (resp?.user) {
+      // Nested shape
+      userFields = resp.user;
+      if (!token && resp.user.token) token = resp.user.token;
+    } else {
+      // Flat shape: remove token and use the remaining fields as user
+      const { token: _t, ...rest } = resp || {};
+      userFields = rest;
+    }
+
+    // Normalize id to number when possible
+    if (userFields && userFields.id != null) {
+      const maybeNum = Number(userFields.id);
+      if (!Number.isNaN(maybeNum)) userFields.id = maybeNum;
+    }
+
+    localStorage.setItem('token', token ?? '');
+    localStorage.setItem('user', JSON.stringify(userFields ?? null));
+    setUser(userFields ?? null);
   };
 
   const logoutUser = () => {

@@ -24,16 +24,25 @@ const LoginPage = () => {
     }
     setLoading(true);
     try {
-      // data = { token, id, fullName, email, role, department, ... }
+      // data may be flat or nested: { token, id, ... } or { token, user: { ... } }
       const data = await login(form.email, form.password);
+      console.log('Login response:', data);
 
-      if (!data.token) {
+      if (!data?.token && !data?.user?.token) {
         setError('Login failed: no token received. Check backend response.');
         return;
       }
 
-      // Pass the full flat response — AuthContext extracts token vs user fields
+      // Pass the full response — AuthContext will normalize and store user/token
       loginUser(data);
+
+      // Verify stored user has an id before navigating
+      const stored = JSON.parse(localStorage.getItem('user') || 'null');
+      if (!stored?.id) {
+        setError('Login succeeded but no user id was returned by the backend.');
+        return;
+      }
+
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password.');

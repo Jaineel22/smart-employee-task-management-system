@@ -12,6 +12,11 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Safety: block requests that contain an 'undefined' path segment
+    if (config.url && String(config.url).includes('/undefined')) {
+      console.warn('Blocked API request with undefined id in URL:', config.url);
+      return Promise.reject(new Error('Blocked request: undefined id in URL'));
+    }
     return config;
   },
   (error) => Promise.reject(error)
