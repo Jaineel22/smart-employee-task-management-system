@@ -87,9 +87,13 @@ public class AuthService {
                         user.getEmail()
                 );
 
-        // Return token
+        // Return full auth response
         return new AuthResponse(
-                token
+                token,
+                user.getId(),
+                user.getFullName(),
+                user.getEmail(),
+                user.getRole()
         );
     }
 }

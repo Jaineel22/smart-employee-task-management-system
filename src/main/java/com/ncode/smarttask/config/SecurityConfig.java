@@ -24,8 +24,13 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
+                // Disable CSRF for REST APIs
                 .csrf(csrf -> csrf.disable())
 
+                // Enable CORS (IMPORTANT for frontend requests)
+                .cors(Customizer.withDefaults())
+
+                // Configure endpoint access
                 .authorizeHttpRequests(auth -> auth
 
                         // Public APIs
@@ -38,22 +43,24 @@ public class SecurityConfig {
                         .authenticated()
                 )
 
-                // Stateless JWT
+                // Stateless session for JWT
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
 
+                // JWT filter before Spring auth filter
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
                 )
 
+                // Optional: disable basic auth if using JWT only
                 .httpBasic(Customizer.withDefaults())
 
-                .formLogin(form ->
-                        form.disable());
+                // Disable form login
+                .formLogin(form -> form.disable());
 
         return http.build();
     }
@@ -63,7 +70,6 @@ public class SecurityConfig {
             AuthenticationConfiguration config
     ) throws Exception {
 
-        return config
-                .getAuthenticationManager();
+        return config.getAuthenticationManager();
     }
 }
