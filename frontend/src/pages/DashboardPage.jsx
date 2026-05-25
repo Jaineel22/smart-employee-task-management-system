@@ -1,4 +1,3 @@
-// empty file
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getAdminDashboard, getEmployeeDashboard } from '../services/dashboardService';
@@ -10,53 +9,67 @@ import {
 } from 'lucide-react';
 
 const DashboardPage = () => {
-  const { user }            = useAuth();
-  const [data, setData]     = useState(null);
+  const { user }              = useAuth();
+  const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
+  const [error, setError]     = useState('');
 
   const isAdminOrManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   useEffect(() => {
-    const fetch = async () => {
+    if (!user) return;
+
+    const fetchData = async () => {
       try {
+        let result;
         if (isAdminOrManager) {
-          setData(await getAdminDashboard());
+          result = await getAdminDashboard();
         } else {
-          setData(await getEmployeeDashboard(user.id));
+          // user.id is now always a real number from backend response
+          result = await getEmployeeDashboard(user.id);
         }
-      } catch {
-        setError('Failed to load dashboard data.');
+        setData(result);
+      } catch (err) {
+        console.error('Dashboard error:', err.response?.data || err.message);
+        setError(
+          err.response?.data?.message || 'Failed to load dashboard data.'
+        );
       } finally {
         setLoading(false);
       }
     };
-    fetch();
+
+    fetchData();
   }, [user]);
 
   if (loading) return <Loader />;
-  if (error)   return <p className="text-red-500 text-sm">{error}</p>;
+
+  if (error) return (
+    <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+      {error}
+    </div>
+  );
 
   const adminCards = [
-    { title: 'Total Employees',    value: data?.totalEmployees,    icon: Users,        color: 'blue'   },
-    { title: 'Total Managers',     value: data?.totalManagers,     icon: Users,        color: 'purple' },
-    { title: 'Total Projects',     value: data?.totalProjects,     icon: FolderKanban, color: 'green'  },
-    { title: 'Total Tasks',        value: data?.totalTasks,        icon: Layers,       color: 'gray'   },
-    { title: 'Completed Tasks',    value: data?.completedTasks,    icon: CheckSquare,  color: 'green'  },
-    { title: 'Pending Tasks',      value: data?.pendingTasks,      icon: Clock,        color: 'yellow' },
-    { title: 'In Progress',        value: data?.inProgressTasks,   icon: BarChart2,    color: 'blue'   },
-    { title: 'High Priority',      value: data?.highPriorityTasks, icon: AlertCircle,  color: 'red'    },
-    { title: 'Total Reports',      value: data?.totalReports,      icon: FileText,     color: 'purple' },
-    { title: 'Notifications',      value: data?.totalNotifications,icon: Bell,         color: 'gray'   },
+    { title: 'Total Employees',    value: data?.totalEmployees,     icon: Users,        color: 'blue'   },
+    { title: 'Total Managers',     value: data?.totalManagers,      icon: Users,        color: 'purple' },
+    { title: 'Total Projects',     value: data?.totalProjects,      icon: FolderKanban, color: 'green'  },
+    { title: 'Total Tasks',        value: data?.totalTasks,         icon: Layers,       color: 'gray'   },
+    { title: 'Completed Tasks',    value: data?.completedTasks,     icon: CheckSquare,  color: 'green'  },
+    { title: 'Pending Tasks',      value: data?.pendingTasks,       icon: Clock,        color: 'yellow' },
+    { title: 'In Progress',        value: data?.inProgressTasks,    icon: BarChart2,    color: 'blue'   },
+    { title: 'High Priority',      value: data?.highPriorityTasks,  icon: AlertCircle,  color: 'red'    },
+    { title: 'Total Reports',      value: data?.totalReports,       icon: FileText,     color: 'purple' },
+    { title: 'Notifications',      value: data?.totalNotifications, icon: Bell,         color: 'gray'   },
   ];
 
   const employeeCards = [
-    { title: 'My Total Tasks',       value: data?.totalTasks,                     icon: Layers,      color: 'blue'   },
-    { title: 'Completed',            value: data?.completedTasks,                 icon: CheckSquare, color: 'green'  },
-    { title: 'Pending',              value: data?.pendingTasks,                   icon: Clock,       color: 'yellow' },
-    { title: 'In Progress',          value: data?.inProgressTasks,                icon: BarChart2,   color: 'blue'   },
-    { title: 'My Reports',           value: data?.totalReports,                   icon: FileText,    color: 'purple' },
-    { title: 'Unread Notifications', value: data?.unreadNotifications,            icon: Bell,        color: 'red'    },
+    { title: 'My Total Tasks',       value: data?.totalTasks,                icon: Layers,      color: 'blue'   },
+    { title: 'Completed',            value: data?.completedTasks,            icon: CheckSquare, color: 'green'  },
+    { title: 'Pending',              value: data?.pendingTasks,              icon: Clock,       color: 'yellow' },
+    { title: 'In Progress',          value: data?.inProgressTasks,           icon: BarChart2,   color: 'blue'   },
+    { title: 'My Reports',           value: data?.totalReports,              icon: FileText,    color: 'purple' },
+    { title: 'Unread Notifications', value: data?.unreadNotifications,       icon: Bell,        color: 'red'    },
     {
       title: 'Avg Completion',
       value: `${data?.averageCompletionPercentage ?? 0}%`,

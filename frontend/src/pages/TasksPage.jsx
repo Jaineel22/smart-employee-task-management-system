@@ -1,4 +1,3 @@
-// empty file
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getAllTasks, getTasksByEmployee, updateTaskProgress } from '../services/taskService';
@@ -7,37 +6,42 @@ import Loader from '../components/Loader';
 import { X } from 'lucide-react';
 
 const TasksPage = () => {
-  const { user }            = useAuth();
-  const [tasks, setTasks]   = useState([]);
+  const { user }              = useAuth();
+  const [tasks, setTasks]     = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
-
-  // Progress modal state
-  const [selected, setSelected]  = useState(null);
-  const [progress, setProgress]  = useState({ taskStatus: '', completionPercentage: 0 });
-  const [saving, setSaving]      = useState(false);
+  const [error, setError]     = useState('');
+  const [selected, setSelected]   = useState(null);
+  const [progress, setProgress]   = useState({ taskStatus: '', completionPercentage: 0 });
+  const [saving, setSaving]       = useState(false);
 
   const isAdminOrManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const load = async () => {
     setLoading(true);
+    setError('');
     try {
       const data = isAdminOrManager
         ? await getAllTasks()
         : await getTasksByEmployee(user.id);
       setTasks(data);
-    } catch {
-      setError('Failed to load tasks.');
+    } catch (err) {
+      console.error('Tasks error:', err.response?.data || err.message);
+      setError(err.response?.data?.message || 'Failed to load tasks.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (user) load();
+  }, [user]);
 
   const openProgress = (task) => {
     setSelected(task);
-    setProgress({ taskStatus: task.status, completionPercentage: task.completionPercentage });
+    setProgress({
+      taskStatus: task.status,
+      completionPercentage: task.completionPercentage ?? 0,
+    });
   };
 
   const handleSaveProgress = async () => {
@@ -59,12 +63,18 @@ const TasksPage = () => {
     <div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-800">Tasks</h1>
-        <p className="text-sm text-gray-500">{tasks.length} task{tasks.length !== 1 ? 's' : ''}</p>
+        <p className="text-sm text-gray-500">
+          {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+        </p>
       </div>
 
-      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
+          {error}
+        </div>
+      )}
 
-      {tasks.length === 0 ? (
+      {tasks.length === 0 && !error ? (
         <p className="text-center py-16 text-gray-400 text-sm">No tasks assigned yet.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -113,7 +123,9 @@ const TasksPage = () => {
                   min={0}
                   max={100}
                   value={progress.completionPercentage}
-                  onChange={(e) => setProgress((p) => ({ ...p, completionPercentage: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setProgress((p) => ({ ...p, completionPercentage: Number(e.target.value) }))
+                  }
                   className="w-full accent-blue-600"
                 />
               </div>

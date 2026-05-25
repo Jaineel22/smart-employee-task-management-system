@@ -1,4 +1,3 @@
-// empty file
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getNotificationsByUser, markAsRead, deleteNotification } from '../services/notificationService';
@@ -13,34 +12,62 @@ const typeColors = {
 };
 
 const NotificationsPage = () => {
-  const { user }                            = useAuth();
-  const [notifications, setNotifications]   = useState([]);
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState('');
+  const { user }                          = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState('');
 
   const load = async () => {
     setLoading(true);
+    setError('');
     try {
-      setNotifications(await getNotificationsByUser(user.id));
-    } catch {
-      setError('Failed to load notifications.');
+      const data = await getNotificationsByUser(user.id);
+      setNotifications(data);
+    } catch (err) {
+      console.error('Notifications error:', err.response?.data || err.message);
+      setError(err.response?.data?.message || 'Failed to load notifications.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (user) load();
+  }, [user]);
 
   const handleMarkRead = async (id) => {
-    await markAsRead(id);
-    setNotifications((prev) =>
-      prev.map((n) => n.id === id ? { ...n, isRead: true } : n)
-    );
+    try {
+      await markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => n.id === id ? { ...n, isRead: true } : n)
+      );
+    } catch {
+      alert('Failed to mark as read.');
+    }
   };
 
   const handleDelete = async (id) => {
-    await deleteNotification(id);
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await deleteNotification(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch {
+      alert('Failed to delete notification.');
+    }
+  };
+
+  // Safe date formatting — createdAt may be array [2025,6,1,...] or string
+  const formatDate = (createdAt) => {
+    if (!createdAt) return '';
+    try {
+      // Spring Boot LocalDateTime serializes as array by default without config
+      if (Array.isArray(createdAt)) {
+        const [y, mo, d] = createdAt;
+        return `${d}/${mo}/${y}`;
+      }
+      return new Date(createdAt).toLocaleDateString();
+    } catch {
+      return '';
+    }
   };
 
   if (loading) return <Loader />;
@@ -56,9 +83,13 @@ const NotificationsPage = () => {
         </p>
       </div>
 
-      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
+          {error}
+        </div>
+      )}
 
-      {notifications.length === 0 ? (
+      {notifications.length === 0 && !error ? (
         <div className="text-center py-16 text-gray-400">
           <Bell size={36} className="mx-auto mb-2 text-gray-300" />
           <p className="text-sm">No notifications yet.</p>
@@ -84,7 +115,8 @@ const NotificationsPage = () => {
                 </div>
                 <p className="text-xs text-gray-500">{n.message}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {n.type?.replace(/_/g, ' ')} · {new Date(n.createdAt).toLocaleDateString()}
+                  {n.type?.replace(/_/g, ' ')}
+                  {n.createdAt ? ` · ${formatDate(n.createdAt)}` : ''}
                 </p>
               </div>
 

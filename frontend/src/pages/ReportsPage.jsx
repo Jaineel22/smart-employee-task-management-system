@@ -1,47 +1,64 @@
-// empty file
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getReportsByUser, getAllReports, createReport } from '../services/reportService';
 import Loader from '../components/Loader';
 import { Plus, X, FileText } from 'lucide-react';
 
-const emptyForm = { workDescription: '', hoursWorked: '', completionPercentage: 0, reportDate: '', taskId: '' };
+const emptyForm = {
+  workDescription: '',
+  hoursWorked: '',
+  completionPercentage: 0,
+  reportDate: '',
+  taskId: '',
+};
 
 const ReportsPage = () => {
-  const { user }              = useAuth();
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { user }                  = useAuth();
+  const [reports, setReports]     = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm]       = useState(emptyForm);
+  const [form, setForm]           = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError]     = useState('');
+  const [error, setError]         = useState('');
 
   const isAdminOrManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
 
   const load = async () => {
     setLoading(true);
+    setError('');
     try {
-      const data = isAdminOrManager ? await getAllReports() : await getReportsByUser(user.id);
+      const data = isAdminOrManager
+        ? await getAllReports()
+        : await getReportsByUser(user.id);
       setReports(data);
-    } catch {
-      setError('Failed to load reports.');
+    } catch (err) {
+      console.error('Reports error:', err.response?.data || err.message);
+      setError(err.response?.data?.message || 'Failed to load reports.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (user) load();
+  }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    if (!form.taskId || !form.workDescription || !form.hoursWorked || !form.reportDate) {
+      setError('Task ID, description, hours, and date are required.');
+      return;
+    }
     setSubmitting(true);
     try {
       await createReport({
-        ...form,
-        userId: user.id,
-        taskId: Number(form.taskId),
-        hoursWorked: Number(form.hoursWorked),
+        workDescription:     form.workDescription,
+        hoursWorked:         Number(form.hoursWorked),
         completionPercentage: Number(form.completionPercentage),
+        reportDate:          form.reportDate,
+        userId:              user.id,
+        taskId:              Number(form.taskId),
       });
       setShowModal(false);
       setForm(emptyForm);
@@ -53,6 +70,12 @@ const ReportsPage = () => {
     }
   };
 
+  // Safe helper — task may be null or partially loaded
+  const getTaskLabel = (report) => {
+    if (!report.task) return `Task #${report.taskId || '—'}`;
+    return report.task.title || `Task #${report.task.id}`;
+  };
+
   if (loading) return <Loader />;
 
   return (
@@ -60,7 +83,9 @@ const ReportsPage = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-800">Daily Work Reports</h1>
-          <p className="text-sm text-gray-500">{reports.length} report{reports.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-500">
+            {reports.length} report{reports.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -70,21 +95,25 @@ const ReportsPage = () => {
         </button>
       </div>
 
-      {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
+          {error}
+        </div>
+      )}
 
-      {reports.length === 0 ? (
+      {reports.length === 0 && !error ? (
         <p className="text-center py-16 text-gray-400 text-sm">No reports submitted yet.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {reports.map((r) => (
             <div key={r.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
               <div className="flex items-start gap-3 mb-3">
-                <div className="bg-purple-100 text-purple-600 p-2 rounded-xl">
+                <div className="bg-purple-100 text-purple-600 p-2 rounded-xl flex-shrink-0">
                   <FileText size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800 truncate">
-                    {r.task?.title || `Task #${r.task?.id}`}
+                    {getTaskLabel(r)}
                   </p>
                   <p className="text-xs text-gray-400">{r.reportDate}</p>
                 </div>
@@ -107,13 +136,21 @@ const ReportsPage = () => {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-800">Submit Work Report</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowModal(false); setError(''); }}
+                className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 text-xs rounded-xl px-3 py-2 mb-3">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Task ID</label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Task ID *</label>
                 <input
                   type="number"
                   value={form.taskId}
@@ -123,7 +160,7 @@ const ReportsPage = () => {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Work Description</label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Work Description *</label>
                 <textarea
                   rows={3}
                   value={form.workDescription}
@@ -134,10 +171,11 @@ const ReportsPage = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Hours Worked</label>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Hours Worked *</label>
                   <input
                     type="number"
                     step="0.5"
+                    min="0.5"
                     value={form.hoursWorked}
                     onChange={(e) => setForm((p) => ({ ...p, hoursWorked: e.target.value }))}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -145,7 +183,7 @@ const ReportsPage = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-600 block mb-1">Report Date</label>
+                  <label className="text-xs font-medium text-gray-600 block mb-1">Report Date *</label>
                   <input
                     type="date"
                     value={form.reportDate}

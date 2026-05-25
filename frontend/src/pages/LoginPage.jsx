@@ -1,4 +1,3 @@
-// empty file
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -25,9 +24,16 @@ const LoginPage = () => {
     }
     setLoading(true);
     try {
+      // data = { token, id, fullName, email, role, department, ... }
       const data = await login(form.email, form.password);
-      // Adjust these keys to match your backend AuthResponse fields
-      loginUser(data.user ?? { email: form.email, role: data.role, fullName: data.fullName, id: data.id }, data.token);
+
+      if (!data.token) {
+        setError('Login failed: no token received. Check backend response.');
+        return;
+      }
+
+      // Pass the full flat response — AuthContext extracts token vs user fields
+      loginUser(data);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password.');
