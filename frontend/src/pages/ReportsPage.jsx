@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { getReportsByUser, getAllReports, createReport } from '../services/reportService';
+import { getReportsByUser, getAllReports, createReport, deleteReport } from '../services/reportService';
 import Loader from '../components/Loader';
-import { Plus, X, FileText } from 'lucide-react';
+import { Plus, X, FileText, Trash2 } from 'lucide-react';
 
 const emptyForm = {
-  workDescription: '',
-  hoursWorked: '',
-  completionPercentage: 0,
-  reportDate: '',
-  taskId: '',
+  workDescription: '', hoursWorked: '', completionPercentage: 0, reportDate: '', taskId: '',
 };
 
 const ReportsPage = () => {
@@ -20,46 +16,46 @@ const ReportsPage = () => {
   const [form, setForm]           = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError]         = useState('');
+  const [toast, setToast]         = useState('');
 
   const isAdminOrManager = user?.role === 'ADMIN' || user?.role === 'MANAGER';
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = isAdminOrManager
-        ? await getAllReports()
-        : await getReportsByUser(user.id);
+      const data = isAdminOrManager ? await getAllReports() : await getReportsByUser(user.id);
       setReports(data);
     } catch (err) {
-      console.error('Reports error:', err.response?.data || err.message);
       setError(err.response?.data?.message || 'Failed to load reports.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (user) load();
-  }, [user]);
+  useEffect(() => { if (user) load(); }, [user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.taskId || !form.workDescription || !form.hoursWorked || !form.reportDate) {
-      setError('Task ID, description, hours, and date are required.');
-      return;
-    }
+    if (!form.taskId)          { setError('Task ID is required.');        return; }
+    if (!form.workDescription.trim()) { setError('Description is required.'); return; }
+    if (!form.hoursWorked)     { setError('Hours worked is required.');   return; }
+    if (!form.reportDate)      { setError('Report date is required.');    return; }
+
     setSubmitting(true);
     try {
       await createReport({
-        workDescription:     form.workDescription,
-        hoursWorked:         Number(form.hoursWorked),
+        workDescription:      form.workDescription,
+        hoursWorked:          Number(form.hoursWorked),
         completionPercentage: Number(form.completionPercentage),
-        reportDate:          form.reportDate,
-        userId:              user.id,
-        taskId:              Number(form.taskId),
+        reportDate:           form.reportDate,
+        userId:               user.id,
+        taskId:               Number(form.taskId),
       });
+      showToast('Report submitted successfully.');
       setShowModal(false);
       setForm(emptyForm);
       load();
@@ -70,32 +66,52 @@ const ReportsPage = () => {
     }
   };
 
-  // Safe helper — task may be null or partially loaded
-  const getTaskLabel = (report) => {
-    if (!report.task) return `Task #${report.taskId || '—'}`;
-    return report.task.title || `Task #${report.task.id}`;
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this report?')) return;
+    try {
+      await deleteReport(id);
+      showToast('Report deleted.');
+      setReports((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete report.');
+    }
+  };
+
+  const getTaskLabel = (r) => {
+    if (!r.task) return `Task #${r.taskId || '—'}`;
+    return r.task.title || `Task #${r.task.id}`;
+  };
+
+  const formatDate = (val) => {
+    if (!val) return '—';
+    if (Array.isArray(val)) { const [y, mo, d] = val; return `${d}/${mo}/${y}`; }
+    return val;
   };
 
   if (loading) return <Loader />;
 
   return (
     <div>
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg">
+          {toast}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-800">Daily Work Reports</h1>
-          <p className="text-sm text-gray-500">
-            {reports.length} report{reports.length !== 1 ? 's' : ''}
-          </p>
+          <p className="text-sm text-gray-500">{reports.length} report{reports.length !== 1 ? 's' : ''}</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => { setShowModal(true); setError(''); }}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors"
         >
           <Plus size={16} /> Submit Report
         </button>
       </div>
 
-      {error && (
+      {error && !showModal && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">
           {error}
         </div>
@@ -106,16 +122,14 @@ const ReportsPage = () => {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {reports.map((r) => (
-            <div key={r.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div key={r.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 relative group">
               <div className="flex items-start gap-3 mb-3">
                 <div className="bg-purple-100 text-purple-600 p-2 rounded-xl flex-shrink-0">
                   <FileText size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">
-                    {getTaskLabel(r)}
-                  </p>
-                  <p className="text-xs text-gray-400">{r.reportDate}</p>
+                  <p className="text-sm font-semibold text-gray-800 truncate">{getTaskLabel(r)}</p>
+                  <p className="text-xs text-gray-400">{formatDate(r.reportDate)}</p>
                 </div>
               </div>
               <p className="text-xs text-gray-600 mb-3 line-clamp-3">{r.workDescription}</p>
@@ -125,6 +139,15 @@ const ReportsPage = () => {
                   {r.completionPercentage}% done
                 </span>
               </div>
+
+              {/* Delete button — visible on hover */}
+              <button
+                onClick={() => handleDelete(r.id)}
+                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-red-400 hover:text-red-600 p-1"
+                title="Delete report"
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
@@ -197,9 +220,7 @@ const ReportsPage = () => {
                   Completion: {form.completionPercentage}%
                 </label>
                 <input
-                  type="range"
-                  min={0}
-                  max={100}
+                  type="range" min={0} max={100}
                   value={form.completionPercentage}
                   onChange={(e) => setForm((p) => ({ ...p, completionPercentage: e.target.value }))}
                   className="w-full accent-blue-600"
