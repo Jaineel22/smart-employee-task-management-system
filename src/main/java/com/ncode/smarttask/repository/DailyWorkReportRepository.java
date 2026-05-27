@@ -24,4 +24,7 @@ public interface DailyWorkReportRepository
 
     Optional<DailyWorkReport>
     findByUserIdAndTaskIdAndReportDate(Long userId, Long taskId, LocalDate reportDate);
+
+    List<DailyWorkReport>
+    findByUserIdAndReportDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
 }

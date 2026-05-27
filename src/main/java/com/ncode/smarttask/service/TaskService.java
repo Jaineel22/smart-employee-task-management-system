@@ -13,6 +13,7 @@ import com.ncode.smarttask.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -101,6 +102,13 @@ public class TaskService {
             // Auto-complete task if percentage reaches 100
             if (pct == 100) {
                 task.setStatus(TaskStatus.COMPLETED);
+                if(task.getCompletedAt() == null){
+                    task.setCompletedAt(LocalDateTime.now());
+                }
+            }
+
+            if(request.getTaskStatus() == TaskStatus.COMPLETED && task.getCompletedAt() == null){
+                 task.setCompletedAt(LocalDateTime.now());
             }
         }
 

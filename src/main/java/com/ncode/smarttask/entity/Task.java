@@ -44,6 +44,10 @@ public class Task {
     @Builder.Default
     private Integer completionPercentage = 0;
 
+    // NEW FIELD ADDED
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
