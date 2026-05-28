@@ -1157,6 +1157,8 @@ import DashboardCard from '../components/DashboardCard';
 import TaskCard from '../components/TaskCard';
 import Loader from '../components/Loader';
 import ProductivityScoreCard from '../components/ProductivityScore';
+import AttendanceWidget from '../components/AttendanceWidget';  // ✅ ADDED
+import InsightsCard from '../components/InsightsCard';          // ✅ ADDED
 import { motion } from 'framer-motion';
 import {
   Users, FolderKanban, CheckSquare, Clock, AlertCircle,
@@ -1264,6 +1266,9 @@ const ManagerDashboard = ({ data, navigate }) => {
           <QuickAction icon={Users} label="Team" onClick={() => navigate('/users')} variant="outline" />
         </div>
       </div>
+
+      {/* ✅ Manager Team Insights */}
+      <InsightsCard isManager={true} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1402,6 +1407,12 @@ const EmployeeDashboard = ({ data, user, navigate, tasks }) => {
             <ClipboardList size={15} /> Submit Report
           </button>
         </div>
+      </div>
+
+      {/* ✅ Attendance Widget + Insights side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <AttendanceWidget />
+        <InsightsCard isManager={false} />
       </div>
 
       {/* Productivity Score + Month Filter */}

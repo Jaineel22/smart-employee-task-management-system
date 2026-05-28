@@ -5,12 +5,14 @@ import com.ncode.smarttask.dto.TeamAnalyticsDTO;
 import com.ncode.smarttask.entity.User;
 import com.ncode.smarttask.repository.UserRepository;
 import com.ncode.smarttask.service.ProductivityService;
+import com.ncode.smarttask.service.InsightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/productivity")
@@ -19,6 +21,7 @@ public class ProductivityController {
 
     private final ProductivityService productivityService;
     private final UserRepository      userRepository;
+    private final InsightService      insightService;  // ADDED
 
     /**
      * EMPLOYEE — GET /api/productivity/me?month=5&year=2026
@@ -83,5 +86,26 @@ public class ProductivityController {
         return ResponseEntity.ok(
                 productivityService.getEmployeeProductivity(id, resolvedMonth, resolvedYear)
         );
+    }
+
+    /**
+     * EMPLOYEE — GET /api/productivity/insights/me
+     * Returns personalised smart insights for the logged-in employee.
+     */
+    @GetMapping("/insights/me")
+    public ResponseEntity<List<String>> getMyInsights(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+        return ResponseEntity.ok(insightService.generateEmployeeInsights(user.getId()));
+    }
+
+    /**
+     * MANAGER — GET /api/productivity/insights/team
+     * Returns team-level smart insights for the manager.
+     */
+    @GetMapping("/insights/team")
+    public ResponseEntity<List<String>> getTeamInsights() {
+        return ResponseEntity.ok(insightService.generateManagerInsights());
     }
 }

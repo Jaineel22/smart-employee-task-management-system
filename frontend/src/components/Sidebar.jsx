@@ -326,7 +326,6 @@
 
 
 
-
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -341,7 +340,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  BarChart2
+  BarChart2,
+  Clock  // ADDED Clock import
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -349,10 +349,14 @@ const allNavItems = [
   { to: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard, roles: undefined },
   { to: '/projects',      label: 'Projects',     icon: FolderKanban,    roles: ['MANAGER','ADMIN'] },
 
-  // NEW ANALYTICS ENTRY ADDED
+  // ANALYTICS ENTRY
   { to: '/analytics',     label: 'Analytics',    icon: BarChart2,       roles: ['MANAGER', 'ADMIN'] },
 
   { to: '/tasks',         label: 'Tasks',        icon: CheckSquare,     roles: undefined },
+  
+  // ATTENDANCE ENTRY - ADDED AFTER Tasks
+  { to: '/attendance',    label: 'Attendance',   icon: Clock,           roles: undefined },
+  
   { to: '/reports',       label: 'Reports',      icon: FileText,        roles: undefined },
   { to: '/notifications', label: 'Notifications',icon: Bell,            roles: undefined },
   { to: '/users',         label: 'Employees',    icon: Users,           roles: ['MANAGER','ADMIN'] },

@@ -28,15 +28,17 @@ public class ProductivityService {
     private final UserRepository            userRepository;
     private final TaskRepository            taskRepository;
     private final DailyWorkReportRepository reportRepository;
+    private final AttendanceService         attendanceService;  // ADDED
 
     // Expected working hours per month (22 working days × 8 hrs)
     private static final double EXPECTED_MONTHLY_HOURS = 176.0;
 
-    // Weighted component multipliers
-    private static final double W_HOURS     = 0.40;
-    private static final double W_COMPLETE  = 0.30;
-    private static final double W_PROGRESS  = 0.20;
-    private static final double W_DEADLINE  = 0.10;
+    // Weighted component multipliers - UPDATED
+    private static final double W_ATTENDANCE = 0.10;  // NEW
+    private static final double W_HOURS      = 0.35;  // was 0.40
+    private static final double W_COMPLETE   = 0.25;  // was 0.30
+    private static final double W_PROGRESS   = 0.20;  // unchanged
+    private static final double W_DEADLINE   = 0.10;  // unchanged
 
     /* ── PUBLIC: single employee ──────────────────────────── */
     public ProductivityDTO getEmployeeProductivity(Long employeeId, int month, int year) {
@@ -103,7 +105,7 @@ public class ProductivityService {
         LocalDate startDate = LocalDate.of(year, month, 1);
         LocalDate endDate   = startDate.withDayOfMonth(startDate.lengthOfMonth());
 
-        // ── 1. Hours Worked Score (40%) ───────────────────
+        // ── 1. Hours Worked Score (35%) ───────────────────
         List<DailyWorkReport> reports = reportRepository
                 .findByUserIdAndReportDateBetween(employee.getId(), startDate, endDate);
 
@@ -113,7 +115,7 @@ public class ProductivityService {
 
         double hoursScore = Math.min(100.0, (hoursWorked / EXPECTED_MONTHLY_HOURS) * 100.0);
 
-        // ── 2. Task Completion Score (30%) ────────────────
+        // ── 2. Task Completion Score (25%) ────────────────
         List<Task> assignedTasks = taskRepository.findByAssignedToId(employee.getId());
 
         // Filter: tasks created/assigned within or before this month
@@ -156,12 +158,23 @@ public class ProductivityService {
                 ? 100.0   // no deadlines set → not penalized
                 : (onTime / (double) completedWithDeadline.size()) * 100.0;
 
-        // ── Final Weighted Score ──────────────────────────
+        // ── 5. Attendance Consistency Score (10%) ────────────────
+        double attendanceScore;
+        try {
+            attendanceScore = attendanceService.getAttendanceConsistencyScore(
+                    employee.getId(), month, year);
+        } catch (Exception e) {
+            // Attendance module not yet populated → neutral 100% so existing scores are unaffected
+            attendanceScore = 100.0;
+        }
+
+        // ── Final Weighted Score ────────────────────────────────
         double productivityScore =
-                (hoursScore          * W_HOURS)    +
-                (taskCompletionScore * W_COMPLETE)  +
-                (avgProgress         * W_PROGRESS)  +
-                (deadlineScore       * W_DEADLINE);
+                (attendanceScore       * W_ATTENDANCE) +
+                (hoursScore            * W_HOURS)       +
+                (taskCompletionScore   * W_COMPLETE)    +
+                (avgProgress           * W_PROGRESS)    +
+                (deadlineScore         * W_DEADLINE);
 
         productivityScore = Math.min(100.0, Math.max(0.0, productivityScore));
 
@@ -229,17 +242,35 @@ public class ProductivityService {
             double prevCompletion = prevAssigned > 0 ? (prevCompleted / (double) prevAssigned) * 100.0 : 0.0;
             double prevProgress   = prevTasks.stream().mapToInt(t -> t.getCompletionPercentage() != null ? t.getCompletionPercentage() : 0).average().orElse(0.0);
 
+            // For previous month, use neutral attendance score (100) if attendanceService not available
+            double prevAttendanceScore;
+            try {
+                prevAttendanceScore = attendanceService.getAttendanceConsistencyScore(employee.getId(), prevMonth, prevYear);
+            } catch (Exception e) {
+                prevAttendanceScore = 100.0;
+            }
+
             double prevScore =
-                    (prevHoursScore  * W_HOURS)   +
-                    (prevCompletion  * W_COMPLETE) +
-                    (prevProgress    * W_PROGRESS) +
-                    (100.0           * W_DEADLINE); // no deadline data for prev → neutral
+                    (prevAttendanceScore * W_ATTENDANCE) +
+                    (prevHoursScore      * W_HOURS)      +
+                    (prevCompletion      * W_COMPLETE)   +
+                    (prevProgress        * W_PROGRESS)   +
+                    (100.0               * W_DEADLINE);  // no deadline data for prev → neutral
 
             double curScore =
                     (curHours        * W_HOURS)    +
                     (curCompletion   * W_COMPLETE)  +
                     (curProgress     * W_PROGRESS)  +
                     (curDeadline     * W_DEADLINE);
+
+            // Add attendance to current score
+            double curAttendanceScore;
+            try {
+                curAttendanceScore = attendanceService.getAttendanceConsistencyScore(employee.getId(), month, year);
+            } catch (Exception e) {
+                curAttendanceScore = 100.0;
+            }
+            curScore += (curAttendanceScore * W_ATTENDANCE);
 
             return round2(curScore - prevScore);
 

@@ -79,7 +79,8 @@ import ReportsPage       from './pages/ReportsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage       from './pages/ProfilePage';
 import UsersPage         from './pages/UsersPage';
-import AnalyticsPage     from './pages/AnalyticsPage'; // NEW IMPORT
+import AnalyticsPage     from './pages/AnalyticsPage';
+import AttendancePage    from './pages/AttendancePage'; // ✅ ADDED import
 
 const App = () => (
   <Routes>
@@ -118,7 +119,7 @@ const App = () => (
         }
       />
 
-      {/* NEW ANALYTICS ROUTE */}
+      {/* ANALYTICS ROUTE - MANAGER/ADMIN only */}
       <Route
         path="analytics"
         element={
@@ -133,6 +134,9 @@ const App = () => (
       <Route path="reports" element={<ReportsPage />} />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="profile" element={<ProfilePage />} />
+      
+      {/* ✅ ATTENDANCE ROUTE - All roles */}
+      <Route path="attendance" element={<AttendancePage />} />
     </Route>
 
     <Route path="*" element={<Navigate to="/dashboard" replace />} />
