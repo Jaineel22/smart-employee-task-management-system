@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getTeamAnalytics, getEmployeeProductivity } from '../services/productivityService';
 import { ProductivityBreakdown, TrendBadge, statusConfig } from '../components/ProductivityScore';
 import Loader from '../components/Loader';
+import PredictionCard from '../components/PredictionCard';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Users, Clock, CheckSquare, TrendingUp, Award, AlertTriangle, BarChart3 } from 'lucide-react';
 import {
@@ -288,13 +289,13 @@ const AnalyticsPage = () => {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  {['Employee','Department','Assigned','Completed','Hours','Score','Status','Trend'].map(h => (
-                    <th key={h} className="px-4 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-100">
+                {['Employee','Department','Assigned','Completed','Hours','Score','Status','Trend','AI Forecast'].map(h => (
+                  <th key={h} className="px-4 py-2.5 text-left font-semibold text-slate-500 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map((emp, i) => (
                   <tr
@@ -325,6 +326,14 @@ const AnalyticsPage = () => {
                     <td className="px-4 py-3">
                       <TrendBadge delta={emp.trendDelta} />
                     </td>
+                    <td className="px-4 py-3">
+                      <PredictionCard
+                        employeeId={emp.employeeId}
+                        month={month}
+                        year={year}
+                        compact={true}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -348,4 +357,4 @@ const AnalyticsPage = () => {
   );
 };
 
-export default AnalyticsPage;   
+export default AnalyticsPage;
