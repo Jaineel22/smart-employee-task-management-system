@@ -80,7 +80,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import ProfilePage       from './pages/ProfilePage';
 import UsersPage         from './pages/UsersPage';
 import AnalyticsPage     from './pages/AnalyticsPage';
-import AttendancePage    from './pages/AttendancePage'; // ✅ ADDED import
+import AttendancePage    from './pages/AttendancePage'; 
 
 const App = () => (
   <Routes>
@@ -135,7 +135,7 @@ const App = () => (
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="profile" element={<ProfilePage />} />
       
-      {/* ✅ ATTENDANCE ROUTE - All roles */}
+      {/* ATTENDANCE ROUTE - All roles */}
       <Route path="attendance" element={<AttendancePage />} />
     </Route>
 

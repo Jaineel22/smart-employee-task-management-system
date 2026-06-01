@@ -160,7 +160,7 @@ const AnalyticsPage = () => {
     const s = e.performanceStatus;
     if (s === 'Outstanding')       return '#10b981';
     if (s === 'Excellent')         return '#3b82f6';
-    if (s === 'Good')              return '#06b6d4';
+    if (s === 'Good')              return '#06b6d4'; 
     if (s === 'Needs Improvement') return '#f59e0b';
     return '#ef4444';
   });
