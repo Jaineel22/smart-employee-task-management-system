@@ -46,38 +46,59 @@ def root():
 # Health check endpoint
 @app.get("/health")
 def health():
-    return {"status": "healthy", "service": "ai-engine"}
+    model_status = get_model_status()
+    return {
+        "status": "healthy", 
+        "service": "ai-engine",
+        "modelLoaded": model_status["model_loaded"]
+    }
 
-# Prediction endpoint
+# Add these imports at the top of app.py (after existing imports)
+from services.predictor import get_prediction
+from utils.model_loader import get_model_status
+
+# Then replace the prediction endpoint
 @app.post("/predict-productivity", response_model=ProductivityResponse)
 async def predict_productivity(request: ProductivityRequest):
-    # Simple prediction logic (stub)
-    # Will be replaced with actual ML model later
+    try:
+        # Convert request to DataFrame
+        import pandas as pd
+        input_data = pd.DataFrame([{
+            'total_tasks_assigned': request.total_tasks_assigned,
+            'total_tasks_completed': request.total_tasks_completed,
+            'avg_completion_percentage': request.avg_completion_percentage,
+            'on_time_completion_rate': request.on_time_completion_rate,
+            'total_hours_worked': request.total_hours_worked,
+            'expected_hours': request.expected_hours,
+            'avg_task_progress': request.avg_task_progress,
+            'month': request.month,
+            'year': request.year
+        }])
+        
+        # Get prediction from trained model
+        prediction_result = get_prediction(input_data)
+        
+        # Generate recommendations
+        recommendations = []
+        if prediction_result['contributing_factors'].get('task_completion_rate', 0) < 70:
+            recommendations.append("Focus on completing assigned tasks to improve productivity")
+        if prediction_result['contributing_factors'].get('on_time_rate', 0) < 80:
+            recommendations.append("Improve deadline management by planning ahead")
+        if prediction_result['contributing_factors'].get('hours_utilization', 0) < 70:
+            recommendations.append("Increase consistent work hours to meet expectations")
+        if prediction_result['contributing_factors'].get('avg_progress', 0) < 60:
+            recommendations.append("Break down tasks into smaller steps for better progress tracking")
+        
+        if not recommendations:
+            recommendations = ["Great performance! Keep maintaining your productivity levels."]
+        
+        return ProductivityResponse(
+            predicted_productivity_score=round(prediction_result['predicted_score'], 1),
+            confidence_interval=[round(prediction_result['predicted_score'] - 5, 1), 
+                                round(prediction_result['predicted_score'] + 5, 1)],
+            contributing_factors=prediction_result['contributing_factors'],
+            recommendations=recommendations[:3]
+        )
     
-    # Calculate a basic productivity score
-    completion_rate = (request.total_tasks_completed / max(1, request.total_tasks_assigned)) * 100
-    hours_rate = (request.total_hours_worked / max(1, request.expected_hours)) * 100
-    
-    predicted_score = (
-        completion_rate * 0.4 +
-        request.on_time_completion_rate * 0.3 +
-        request.avg_task_progress * 0.2 +
-        min(hours_rate, 100) * 0.1
-    )
-    predicted_score = round(min(100, max(0, predicted_score)), 1)
-    
-    return ProductivityResponse(
-        predicted_productivity_score=predicted_score,
-        confidence_interval=[predicted_score - 5, predicted_score + 5],
-        contributing_factors={
-            "task_completion_rate": completion_rate,
-            "on_time_rate": request.on_time_completion_rate,
-            "avg_progress": request.avg_task_progress,
-            "hours_utilization": hours_rate
-        },
-        recommendations=[
-            "Complete pending tasks to improve score",
-            "Maintain consistent work hours",
-            "Focus on deadline management"
-        ]
-    )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
