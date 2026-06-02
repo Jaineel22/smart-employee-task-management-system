@@ -2,6 +2,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
+import pandas as pd
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Import services and utilities
+from services.predictor import get_prediction
+from utils.model_loader import get_model_status
 
 # Create FastAPI app
 app = FastAPI(title="Productivity Prediction AI Engine", version="1.0.0")
@@ -34,13 +44,15 @@ class ProductivityResponse(BaseModel):
     contributing_factors: Dict[str, float]
     recommendations: List[str]
 
-# Root endpoint - THIS WAS MISSING
+# Root endpoint
 @app.get("/")
 def root():
+    model_status = get_model_status()
     return {
         "message": "Productivity Prediction AI Service is running",
         "status": "healthy",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "modelLoaded": model_status.get("productivity_model_loaded", False)
     }
 
 # Health check endpoint
@@ -50,19 +62,16 @@ def health():
     return {
         "status": "healthy", 
         "service": "ai-engine",
-        "modelLoaded": model_status["model_loaded"]
+        "modelLoaded": model_status.get("productivity_model_loaded", False)
     }
 
-# Add these imports at the top of app.py (after existing imports)
-from services.predictor import get_prediction
-from utils.model_loader import get_model_status
-
-# Then replace the prediction endpoint
+# Prediction endpoint
 @app.post("/predict-productivity", response_model=ProductivityResponse)
 async def predict_productivity(request: ProductivityRequest):
     try:
+        logger.info(f"Received prediction request for employee {request.employee_id}")
+        
         # Convert request to DataFrame
-        import pandas as pd
         input_data = pd.DataFrame([{
             'total_tasks_assigned': request.total_tasks_assigned,
             'total_tasks_completed': request.total_tasks_completed,
@@ -92,13 +101,29 @@ async def predict_productivity(request: ProductivityRequest):
         if not recommendations:
             recommendations = ["Great performance! Keep maintaining your productivity levels."]
         
+        predicted_score = round(prediction_result['predicted_score'], 1)
+        
         return ProductivityResponse(
-            predicted_productivity_score=round(prediction_result['predicted_score'], 1),
-            confidence_interval=[round(prediction_result['predicted_score'] - 5, 1), 
-                                round(prediction_result['predicted_score'] + 5, 1)],
+            predicted_productivity_score=predicted_score,
+            confidence_interval=[round(predicted_score - 5, 1), round(predicted_score + 5, 1)],
             contributing_factors=prediction_result['contributing_factors'],
             recommendations=recommendations[:3]
         )
     
     except Exception as e:
+        logger.error(f"Prediction error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
+
+# Import and include burnout routes (for Phase AI-4A)
+try:
+    from routes import burnout_routes
+    app.include_router(burnout_routes.router, prefix="/api/v1")
+    logger.info("✅ Burnout routes registered successfully")
+except ImportError as e:
+    logger.warning(f"Could not import burnout routes: {e}")
+except Exception as e:
+    logger.error(f"Error registering burnout routes: {e}")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
