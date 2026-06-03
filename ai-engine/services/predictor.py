@@ -18,12 +18,13 @@ def get_prediction(input_data):
     Returns:
         dict with prediction and contributing factors
     """
-    # Load model and scaler
-    model = get_model()
-    scaler = get_scaler()
+    # Load model and scaler with the correct model name 'productivity'
+    model = get_model('productivity')  # ✅ FIXED: Added 'productivity'
+    scaler = get_scaler('productivity')  # ✅ FIXED: Added 'productivity'
     
     if model is None or scaler is None:
         # Fallback to rule-based prediction if model not loaded
+        print("⚠️ Model not loaded, using fallback prediction")
         return fallback_prediction(input_data)
     
     # Calculate derived features

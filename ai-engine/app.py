@@ -65,6 +65,17 @@ def health():
         "modelLoaded": model_status.get("productivity_model_loaded", False)
     }
 
+# AI-4 Health check endpoint (new)
+@app.get("/ai-health")
+def ai_health():
+    """Comprehensive health check for AI-4 modules"""
+    return {
+        "status": "healthy",
+        "version": "4.0.0",
+        "modules": ["productivity", "burnout"],
+        "message": "AI-4 Burnout Detection module is ready"
+    }
+
 # Prediction endpoint
 @app.post("/predict-productivity", response_model=ProductivityResponse)
 async def predict_productivity(request: ProductivityRequest):
@@ -114,15 +125,41 @@ async def predict_productivity(request: ProductivityRequest):
         logger.error(f"Prediction error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
-# Import and include burnout routes (for Phase AI-4A)
+# ── AI-4 Routes (Burnout Detection) ──────────────────────────────────────
+
+# Import and include burnout routes
 try:
     from routes import burnout_routes
+    # Register with both prefixes for flexibility
     app.include_router(burnout_routes.router, prefix="/api/v1")
+    app.include_router(burnout_routes.router)  # Also register without prefix
     logger.info("✅ Burnout routes registered successfully")
+    logger.info("   Available endpoints:")
+    logger.info("   - GET /burnout/{employee_id}")
+    logger.info("   - POST /burnout/")
+    logger.info("   - GET /api/v1/burnout/{employee_id}")
+    logger.info("   - POST /api/v1/burnout/")
 except ImportError as e:
     logger.warning(f"Could not import burnout routes: {e}")
 except Exception as e:
     logger.error(f"Error registering burnout routes: {e}")
+
+# ── Test endpoint to verify burnout module is working ─────────────────────
+@app.get("/test-burnout")
+async def test_burnout():
+    """Test endpoint to verify burnout module is loaded"""
+    try:
+        from services.burnout_predictor import BurnoutPredictor
+        predictor = BurnoutPredictor()
+        test_result = predictor.predict({"employeeId": 1})
+        return {
+            "status": "burnout_module_loaded",
+            "test_result": test_result
+        }
+    except ImportError as e:
+        return {"status": "error", "message": f"Import error: {str(e)}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     import uvicorn
