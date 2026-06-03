@@ -1,53 +1,50 @@
 package com.ncode.smarttask.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
+import java.util.Map;
 
 /**
- * BurnoutResponse.java
- * ====================
- * DTO for employee burnout risk assessment.
- * 
- * Used by WorkforceIntelligenceController to return burnout predictions
- * to the frontend.
+ * DTO for Burnout Detection Engine response from FastAPI.
+ * Maps to POST /burnout/ response payload.
  */
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class BurnoutResponse {
-    
-    /** Employee identifier */
-    private Long employeeId;
-    
-    /** Employee full name */
-    private String employeeName;
-    
-    /** Burnout risk score (0-100) */
-    private Double burnoutRisk;
-    
-    /** Risk level: LOW, MEDIUM, HIGH */
-    private String level;
-    
-    /** Human-readable reasons for the risk assessment */
-    private List<String> reasons;
-    
-    /** Actionable recommendations */
-    private List<String> recommendations;
-    
-    /** Timestamp of the assessment */
-    private String timestamp;
-    
-    /** Whether AI service was available (false = fallback values) */
-    private Boolean aiServiceAvailable;
-    
-    /** Color code for UI (green, orange, red) */
-    private String colorCode;
-    
-    /** Action message for managers */
-    private String suggestedAction;
+
+    private Integer employeeId;
+    private Integer burnoutRisk;
+    private String  level;           // LOW | MEDIUM | HIGH
+    private List<String>       reasons;
+    private Map<String, Integer> factorScores;
+
+    // ── Constructors ───────────────────────────────────────────────────────────
+
+    public BurnoutResponse() {}
+
+    /** Fallback constructor when AI service is unavailable. */
+    public static BurnoutResponse fallback(Integer employeeId) {
+        BurnoutResponse r = new BurnoutResponse();
+        r.setEmployeeId(employeeId);
+        r.setBurnoutRisk(0);
+        r.setLevel("UNAVAILABLE");
+        r.setReasons(List.of("AI service temporarily unavailable"));
+        return r;
+    }
+
+    // ── Getters & Setters ──────────────────────────────────────────────────────
+
+    public Integer getEmployeeId()                    { return employeeId; }
+    public void setEmployeeId(Integer employeeId)     { this.employeeId = employeeId; }
+
+    public Integer getBurnoutRisk()                   { return burnoutRisk; }
+    public void setBurnoutRisk(Integer burnoutRisk)   { this.burnoutRisk = burnoutRisk; }
+
+    public String getLevel()                          { return level; }
+    public void setLevel(String level)                { this.level = level; }
+
+    public List<String> getReasons()                  { return reasons; }
+    public void setReasons(List<String> reasons)      { this.reasons = reasons; }
+
+    public Map<String, Integer> getFactorScores()              { return factorScores; }
+    public void setFactorScores(Map<String, Integer> factorScores) { this.factorScores = factorScores; }
 }
