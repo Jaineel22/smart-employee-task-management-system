@@ -1,6 +1,7 @@
 package com.ncode.smarttask.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ncode.smarttask.dto.PredictionRequest;
 import com.ncode.smarttask.dto.PredictionResponse;
 import com.ncode.smarttask.entity.DailyWorkReport;
@@ -16,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.PostConstruct;  // ✅ Fixed: Use jakarta instead of javax
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -27,21 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * PredictionService.java
- * ======================
- * Orchestrates the full AI prediction pipeline:
- *   1. Extracts 12 ML features from existing MySQL tables (read-only)
- *   2. Calls Python FastAPI POST /predict-productivity
- *   3. Enriches the response with employee identity fields
- *   4. Returns graceful fallback if Python service is unreachable
- *
- * SAFETY GUARANTEES:
- *   ✅ Never modifies any existing table
- *   ✅ Never throws 500 — always returns a valid response
- *   ✅ Zero changes to existing service logic
- *   ✅ Uses existing repositories only — no new DB dependencies
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -56,44 +43,37 @@ public class PredictionService {
     @Value("${ai.engine.url:http://localhost:8000}")
     private String aiEngineUrl;
 
-    // HttpClient is thread-safe and reused across calls
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .build();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /* ═══════════════════════════════════════════════════════════
-       PUBLIC API
-    ═══════════════════════════════════════════════════════════ */
+    @PostConstruct
+    public void init() {
+        // Configure ObjectMapper to include null values
+        objectMapper.setSerializationInclusion(JsonInclude.Include.ALWAYS);
+        log.info("✅ PredictionService initialized with ObjectMapper configuration");
+    }
 
-    /**
-     * GET /api/predictions/me  and  GET /api/predictions/employee/{id}
-     * Single employee prediction — enriched with identity fields.
-     */
     public PredictionResponse getPrediction(Long employeeId, int month, int year) {
         User employee = userRepository.findById(employeeId).orElse(null);
-
-        // Extract current productivity for trendDelta enrichment
         double currentScore = safeGetCurrentProductivity(employeeId, month, year);
 
         try {
             PredictionRequest features = extractFeatures(employeeId, month, year, currentScore);
             PredictionResponse rawResponse = callPythonService(features);
 
-            // Enrich raw Python response with employee identity
             return enrich(rawResponse, employeeId,
                     employee != null ? employee.getFullName() : "Employee #" + employeeId,
                     currentScore);
 
         } catch (java.net.ConnectException e) {
-            log.warn("[PredictionService] AI engine unreachable at {}. " +
-                     "Start: cd ai-engine && uvicorn app:app --port 8000", aiEngineUrl);
+            log.warn("[PredictionService] AI engine unreachable at {}.", aiEngineUrl);
             return buildUnavailableResponse(employeeId,
                     employee != null ? employee.getFullName() : "Employee #" + employeeId,
                     currentScore,
-                    "AI prediction service is not running. " +
-                    "Start it with: uvicorn app:app --host 0.0.0.0 --port 8000");
+                    "AI prediction service is not running.");
 
         } catch (Exception e) {
             log.error("[PredictionService] Error for employee {}: {}", employeeId, e.getMessage(), e);
@@ -104,12 +84,6 @@ public class PredictionService {
         }
     }
 
-    /**
-     * GET /api/predictions/team
-     * Returns predictions for ALL employees.
-     * Runs predictions in sequence (safe for small teams).
-     * For large teams (50+), consider async batching in a future phase.
-     */
     public List<PredictionResponse> getTeamPredictions(int month, int year) {
         List<User> employees = userRepository.findByRole(Role.EMPLOYEE);
         List<PredictionResponse> results = new ArrayList<>();
@@ -119,7 +93,6 @@ public class PredictionService {
                 PredictionResponse prediction = getPrediction(emp.getId(), month, year);
                 results.add(prediction);
             } catch (Exception e) {
-                // Never let one failed employee break the whole team response
                 log.warn("[PredictionService] Skipping employee {} due to error: {}",
                         emp.getId(), e.getMessage());
                 results.add(buildUnavailableResponse(emp.getId(), emp.getFullName(), 0.0,
@@ -132,10 +105,6 @@ public class PredictionService {
         return results;
     }
 
-    /**
-     * GET /api/predictions/health
-     * Checks if FastAPI service is reachable and model is loaded.
-     */
     public boolean isAiServiceReachable() {
         try {
             HttpRequest req = HttpRequest.newBuilder()
@@ -150,13 +119,22 @@ public class PredictionService {
         }
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PRIVATE: PYTHON SERVICE CALL
-    ═══════════════════════════════════════════════════════════ */
-
+    // ✅ UPDATED: Enhanced error logging with null and empty body checks
     private PredictionResponse callPythonService(PredictionRequest features) throws Exception {
+        // Make sure features is not null
+        if (features == null) {
+            log.error("❌ PredictionRequest features is null!");
+            throw new RuntimeException("PredictionRequest features cannot be null");
+        }
+        
         String requestBody = objectMapper.writeValueAsString(features);
-        log.debug("[PredictionService] Sending to AI engine: {}", requestBody);
+        log.info("📤 Sending to AI Engine: {}", requestBody);
+        
+        // Verify requestBody is not empty
+        if (requestBody == null || requestBody.isEmpty() || requestBody.equals("{}")) {
+            log.error("❌ Request body is empty! Features: {}", features);
+            throw new RuntimeException("Request body is empty");
+        }
 
         HttpRequest httpRequest = HttpRequest.newBuilder()
                 .uri(URI.create(aiEngineUrl + "/predict-productivity"))
@@ -168,22 +146,17 @@ public class PredictionService {
         HttpResponse<String> response = httpClient.send(
                 httpRequest, HttpResponse.BodyHandlers.ofString());
 
+        log.info("📥 AI Engine Response Status: {}, Body: {}", response.statusCode(), response.body());
+
         if (response.statusCode() != 200) {
-            log.warn("[PredictionService] AI engine HTTP {}: {}",
-                    response.statusCode(), response.body());
-            throw new RuntimeException("AI engine returned HTTP " + response.statusCode());
+            log.error("❌ AI Engine Error {}: {}", response.statusCode(), response.body());
+            throw new RuntimeException("AI engine returned HTTP " + response.statusCode() + " body=" + response.body());
         }
 
-        // Parse the raw Python response (which has different field names)
-        var rawMap = objectMapper.readValue(response.body(), java.util.Map.class);
-        
-        // Convert raw Python response to PredictionResponse
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> rawMap = objectMapper.readValue(response.body(), java.util.Map.class);
         return convertFromPythonResponse(rawMap);
     }
-
-    /* ═══════════════════════════════════════════════════════════
-       PRIVATE: CONVERT PYTHON RESPONSE TO DTO
-    ═══════════════════════════════════════════════════════════ */
 
     @SuppressWarnings("unchecked")
     private PredictionResponse convertFromPythonResponse(java.util.Map<String, Object> rawMap) {
@@ -192,7 +165,6 @@ public class PredictionService {
         var contributingFactors = (java.util.Map<String, Double>) rawMap.getOrDefault("contributing_factors", java.util.Map.of());
         var recommendations = (java.util.List<String>) rawMap.getOrDefault("recommendations", List.of());
 
-        // Calculate confidence as the width of confidence interval
         double confidence = (confidenceInterval.get(1) - confidenceInterval.get(0)) / 2;
 
         return PredictionResponse.builder()
@@ -207,92 +179,74 @@ public class PredictionService {
                 .build();
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PRIVATE: FEATURE EXTRACTION
-       All queries are read-only SELECT — zero side effects
-    ═══════════════════════════════════════════════════════════ */
-
     private PredictionRequest extractFeatures(Long employeeId, int month, int year,
                                               double currentProductivity) {
-        LocalDate startDate    = LocalDate.of(year, month, 1);
-        LocalDate endDate      = startDate.withDayOfMonth(startDate.lengthOfMonth());
-        LocalDate today        = LocalDate.now();
+        LocalDate startDate = LocalDate.of(year, month, 1);
+        LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+        LocalDate today = LocalDate.now();
         LocalDate effectiveEnd = endDate.isAfter(today) ? today : endDate;
 
-        // ── 1. Attendance Percentage ──────────────────────────────────────
-        double attendancePct = safeGetAttendancePct(employeeId, month, year);
-
-        // ── 2. Total Hours Worked ─────────────────────────────────────────
-        double totalHours = safeGetHoursWorked(employeeId, startDate, effectiveEnd);
-
-        // ── 3–9. Task-based features ──────────────────────────────────────
         List<Task> allTasks = taskRepository.findByAssignedToId(employeeId)
                 .stream()
                 .filter(t -> t.getCreatedAt() == null
                           || !t.getCreatedAt().toLocalDate().isAfter(endDate))
                 .collect(Collectors.toList());
 
+        long totalTasksAssigned = allTasks.size();
         long completedTasks = allTasks.stream()
                 .filter(t -> t.getStatus() == TaskStatus.COMPLETED).count();
-
-        long pendingTasks = allTasks.stream()
-                .filter(t -> t.getStatus() == TaskStatus.PENDING
-                          || t.getStatus() == TaskStatus.IN_PROGRESS).count();
-
+        
         double avgProgress = allTasks.stream()
-                .mapToInt(t -> t.getCompletionPercentage() != null
-                             ? t.getCompletionPercentage() : 0)
+                .mapToInt(t -> t.getCompletionPercentage() != null ? t.getCompletionPercentage() : 0)
                 .average().orElse(0.0);
+        
+        double onTimeRate = calculateOnTimeRate(allTasks);
+        double totalHours = safeGetHoursWorked(employeeId, startDate, effectiveEnd);
+        double expectedHours = 176.0;
 
-        long overdueTasks = allTasks.stream()
-                .filter(t -> t.getStatus() == TaskStatus.OVERDUE).count();
+        log.info("📊 Extracted features for employee {}: totalTasks={}, completed={}, avgProgress={}%, onTimeRate={}%, hours={}/{}",
+                employeeId, totalTasksAssigned, completedTasks, avgProgress, onTimeRate, totalHours, expectedHours);
 
-        long lateTaskCount = allTasks.stream()
-                .filter(t -> t.getStatus() == TaskStatus.COMPLETED
-                          && t.getDeadline() != null
-                          && t.getCompletedAt() != null
-                          && t.getCompletedAt().isAfter(t.getDeadline())).count();
-
-        double avgCompletionTime = allTasks.stream()
-                .filter(t -> t.getStatus() == TaskStatus.COMPLETED
-                          && t.getCompletedAt() != null
-                          && t.getCreatedAt() != null)
-                .mapToDouble(t -> ChronoUnit.DAYS.between(
-                        t.getCreatedAt().toLocalDate(),
-                        t.getCompletedAt().toLocalDate()))
-                .average().orElse(5.0);
-
-        // ── 10. Reports Submitted ─────────────────────────────────────────
-        long reportsSubmitted = safeGetReportsCount(employeeId, startDate, effectiveEnd);
-
-        // ── 11. Deadline Discipline ───────────────────────────────────────
-        double deadlineDiscipline = calcDeadlineDiscipline(allTasks);
-
-        // ── 12. Attendance Consistency ────────────────────────────────────
-        double attendanceConsistency = safeGetConsistencyScore(employeeId, month, year,
-                attendancePct);
-
-        return PredictionRequest.builder()
-                .attendancePercentage(round2(attendancePct))
+        PredictionRequest request = PredictionRequest.builder()
+                .employeeId(employeeId.intValue())
+                .month(month)
+                .year(year)
+                .totalTasksAssigned((int) totalTasksAssigned)
+                .totalTasksCompleted((int) completedTasks)
+                .avgCompletionPercentage(round2(avgProgress))
+                .onTimeCompletionRate(round2(onTimeRate))
                 .totalHoursWorked(round2(totalHours))
-                .completedTasks((double) completedTasks)
-                .pendingTasks((double) Math.min(pendingTasks, 30))
-                .averageTaskProgress(round2(avgProgress))
-                .lateTaskCount((double) lateTaskCount)
-                .reportsSubmitted((double) reportsSubmitted)
-                .deadlineDisciplineScore(round2(deadlineDiscipline))
-                .attendanceConsistency(round2(attendanceConsistency))
-                .monthlyProductivityScore(round2(currentProductivity))
-                .overdueTasks((double) overdueTasks)
-                .avgTaskCompletionTime(round2(avgCompletionTime))
+                .expectedHours(expectedHours)
+                .avgTaskProgress(round2(avgProgress))
                 .build();
+        
+        // ✅ ADDED LOG to verify built object
+        log.info("✅ Built PredictionRequest: employeeId={}, month={}, year={}, totalTasks={}, completedTasks={}, avgProgress={}, onTimeRate={}, hours={}, expected={}",
+                request.getEmployeeId(), request.getMonth(), request.getYear(),
+                request.getTotalTasksAssigned(), request.getTotalTasksCompleted(),
+                request.getAvgCompletionPercentage(), request.getOnTimeCompletionRate(),
+                request.getTotalHoursWorked(), request.getExpectedHours());
+        
+        return request;
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PRIVATE: SAFE HELPER METHODS
-       Each method swallows its own exceptions and returns a
-       sensible neutral default — prediction never crashes
-    ═══════════════════════════════════════════════════════════ */
+    private double calculateOnTimeRate(List<Task> tasks) {
+        List<Task> completedWithDeadline = tasks.stream()
+                .filter(t -> t.getStatus() == TaskStatus.COMPLETED
+                          && t.getDeadline() != null
+                          && t.getCompletedAt() != null)
+                .collect(Collectors.toList());
+
+        if (completedWithDeadline.isEmpty()) {
+            return 100.0;
+        }
+
+        long onTime = completedWithDeadline.stream()
+                .filter(t -> !t.getCompletedAt().isAfter(t.getDeadline()))
+                .count();
+        
+        return (onTime / (double) completedWithDeadline.size()) * 100.0;
+    }
 
     private double safeGetCurrentProductivity(Long employeeId, int month, int year) {
         try {
@@ -301,16 +255,15 @@ public class PredictionService {
                     .getProductivityScore();
         } catch (Exception e) {
             log.debug("[PredictionService] Could not get productivity for {}: {}", employeeId, e.getMessage());
-            return 70.0; // neutral default
+            return 70.0;
         }
     }
 
-    // FIXED: Removed null check on primitive double
     private double safeGetAttendancePct(Long employeeId, int month, int year) {
         try {
             var summary = attendanceService.getMySummary(employeeId, month, year);
             if (summary != null) {
-                return summary.getAttendanceRate(); // double primitive cannot be null
+                return summary.getAttendanceRate();
             }
             return 80.0;
         } catch (Exception e) {
@@ -318,8 +271,7 @@ public class PredictionService {
             return 80.0;
         }
     }
-
-    // FIXED: Using existing repository method findByUserIdAndReportDateBetween
+    
     private double safeGetHoursWorked(Long employeeId, LocalDate from, LocalDate to) {
         try {
             List<DailyWorkReport> reports = reportRepository.findByUserIdAndReportDateBetween(employeeId, from, to);
@@ -341,8 +293,7 @@ public class PredictionService {
         }
     }
 
-    private double safeGetConsistencyScore(Long employeeId, int month, int year,
-                                            double fallback) {
+    private double safeGetConsistencyScore(Long employeeId, int month, int year, double fallback) {
         try {
             return attendanceService.getAttendanceConsistencyScore(employeeId, month, year);
         } catch (Exception e) {
@@ -364,14 +315,6 @@ public class PredictionService {
         return (onTime / (double) completedWithDeadline.size()) * 100.0;
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PRIVATE: RESPONSE ENRICHMENT
-    ═══════════════════════════════════════════════════════════ */
-
-    /**
-     * Adds employee identity + currentProductivity to the raw Python response.
-     * The Python service doesn't know who the employee is — Spring Boot enriches it.
-     */
     private PredictionResponse enrich(PredictionResponse raw,
                                       Long employeeId,
                                       String employeeName,
@@ -389,15 +332,10 @@ public class PredictionService {
         return raw;
     }
 
-    /**
-     * Graceful offline/error fallback — never throws, always returns valid data.
-     * Frontend shows amber "AI Offline" banner when modelAvailable=false.
-     */
     private PredictionResponse buildUnavailableResponse(Long employeeId,
                                                          String employeeName,
                                                          double currentScore,
                                                          String message) {
-        // Rule-based estimate: current score ± small adjustment
         double estimated = Math.min(100, Math.max(40, currentScore));
         String trendStatus = "UNKNOWN";
 

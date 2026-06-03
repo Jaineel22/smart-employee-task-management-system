@@ -1,5 +1,6 @@
 package com.ncode.smarttask.controller;
 
+import com.ncode.smarttask.dto.PredictionRequest;
 import com.ncode.smarttask.dto.PredictionResponse;
 import com.ncode.smarttask.entity.User;
 import com.ncode.smarttask.repository.UserRepository;
@@ -106,7 +107,6 @@ public class PredictionController {
                 predictionService.getTeamPredictions(resolveMonth(month), resolveYear(year))
         );
     }
-
     /**
      * GET /api/predictions/health
      *
