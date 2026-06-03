@@ -12,7 +12,8 @@ import ProfilePage       from './pages/ProfilePage';
 import UsersPage         from './pages/UsersPage';
 import AnalyticsPage     from './pages/AnalyticsPage';
 import AttendancePage    from './pages/AttendancePage';
-import PredictionPage    from './pages/PredictionPage'; // ✅ ADDED
+import PredictionPage    from './pages/PredictionPage';
+import WorkforceIntelligencePage from './pages/WorkforceIntelligencePage'; // ✅ ADDED
 
 const App = () => (
   <Routes>
@@ -61,13 +62,23 @@ const App = () => (
         }
       />
 
-      {/* ✅ AI PREDICTIONS ROUTE - MANAGER/ADMIN only */}
+      {/* AI PREDICTIONS ROUTE - MANAGER/ADMIN only */}
       <Route
         path="predictions"
         element={
           <RoleProtectedRoute roles={['MANAGER', 'ADMIN']}>
             <PredictionPage />
           </RoleProtectedRoute>
+        }
+      />
+
+      {/* ✅ WORKFORCE INTELLIGENCE ROUTE - All roles */}
+      <Route
+        path="workforce-intelligence"
+        element={
+          <ProtectedRoute>
+            <WorkforceIntelligencePage />
+          </ProtectedRoute>
         }
       />
 

@@ -14,7 +14,8 @@ import {
   X,
   BarChart2,
   Clock,
-  Brain  // ADDED Brain import
+  Brain,
+  Activity  // ✅ ADDED Activity import
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -27,6 +28,9 @@ const allNavItems = [
 
   // AI PREDICTIONS ENTRY - ADDED AFTER Analytics
   { to: '/predictions',   label: 'AI Predictions', icon: Brain,         roles: ['MANAGER', 'ADMIN'] },
+
+  // ✅ WORKFORCE INTELLIGENCE ENTRY - ADDED AFTER AI Predictions
+  { to: '/workforce-intelligence', label: 'Workforce Intel', icon: Activity, roles: undefined },
 
   { to: '/tasks',         label: 'Tasks',        icon: CheckSquare,     roles: undefined },
   
