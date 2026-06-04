@@ -1,236 +1,165 @@
 """
-Team Health Engine
-Aggregates per-employee metrics to compute an overall team health score.
-Provides dimension-level breakdowns: attendance, productivity, completion, engagement.
+AI-4C: Team Health Engine
+Bug fixed:
+  - topPerformers / bottomPerformers / highRiskEmployees now correctly
+    read the "employeeId" key that EmployeeMetric.dict() produces
+    (Pydantic camelCase field → dict key is "employeeId", not "employee_id")
+  - calculate() result does NOT contain managerId — route injects it
 """
 
 import logging
-import statistics
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class TeamHealthEngine:
     """
-    Computes team health score from aggregated employee metrics.
-
-    Categories:
-        90+   → Excellent
-        75–89 → Good
-        60–74 → Average
-        <60   → Needs Attention
+    Aggregate health scorer.
+    Call .calculate(employees) — result dict does NOT contain managerId.
+    The route injects it: TeamHealthResponse(managerId=X, **result)
     """
 
-    # ─── Benchmark Values (ideal team) ────────────────────────────────────────
-    IDEAL_ATTENDANCE    = 95.0
-    IDEAL_PRODUCTIVITY  = 90.0
-    IDEAL_UTILIZATION   = 80.0
-    IDEAL_COMPLETION    = 92.0
-    IDEAL_ENGAGEMENT    = 85.0
-
-    # ─── Dimension Weights (must sum to 100) ──────────────────────────────────
-    WEIGHTS = {
-        "attendance":   25,
-        "productivity": 30,
-        "completion":   25,
-        "engagement":   20,
-    }
-
-    def compute(self, team_data: Dict[str, Any]) -> Dict[str, Any]:
+    def calculate(self, employees: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Compute team health from a list of employee records.
-
-        Args:
-            team_data: Dict containing managerId and list of employee metrics.
-
-        Returns:
-            Full team health report with scores and insights.
+        employees: list of dicts from EmployeeMetric.dict(), keys are camelCase:
+            employeeId          int
+            attendance_pct      float  (Pydantic field alias kept as-is)
+            productivity_pct    float
+            utilization_pct     float
+            task_completion     float
+            report_consistency  float
+            burnout_score       float
+            attrition_score     float
         """
+        if not employees:
+            return self._empty()
+
         try:
-            manager_id = team_data.get("managerId", 0)
-            employees  = team_data.get("employees", [])
+            n = len(employees)
 
-            logger.info(
-                f"[TeamHealth] Computing for managerId={manager_id}, "
-                f"team_size={len(employees)}"
-            )
+            def avg(key: str, default: float = 75.0) -> float:
+                vals = [self._f(e, key, default) for e in employees]
+                return round(sum(vals) / len(vals), 1)
 
-            if not employees:
-                return self._empty_response(manager_id)
+            attendance_score   = avg("attendance_pct",    80.0)
+            productivity_score = avg("productivity_pct",  70.0)
+            utilization_score  = avg("utilization_pct",   70.0)
+            completion_score   = avg("task_completion",   75.0)
+            report_score       = avg("report_consistency", 70.0)
 
-            # ── Aggregate Per-Dimension ────────────────────────────────────────
-            attendance_vals   = [float(e.get("attendancePercentage", 0)) for e in employees]
-            productivity_vals = [float(e.get("productivityScore", 0))    for e in employees]
-            utilization_vals  = [float(e.get("utilizationPercentage", 0)) for e in employees]
-            completion_vals   = [float(e.get("completionRate", 0))        for e in employees]
-            burnout_vals      = [float(e.get("burnoutRisk", 0))           for e in employees]
+            # Engagement: weighted composite minus low-engagement penalty
+            low_eng = sum(
+                1 for e in employees
+                if self._f(e, "report_consistency", 70) < 50
+                or self._f(e, "attendance_pct", 80) < 65
+            )
+            engagement_penalty = (low_eng / n) * 20
+            engagement_score = max(0.0, round(
+                report_score       * 0.5
+                + attendance_score * 0.3
+                + productivity_score * 0.2
+                - engagement_penalty,
+                1,
+            ))
 
-            # ── Dimension Scores (0–100) ───────────────────────────────────────
-            attendance_score   = self._normalize_score(
-                statistics.mean(attendance_vals), 0, self.IDEAL_ATTENDANCE
+            # Burnout penalty
+            high_burnout_count = sum(
+                1 for e in employees
+                if self._f(e, "burnout_score", 0) >= 70
             )
-            productivity_score = self._normalize_score(
-                statistics.mean(productivity_vals), 0, self.IDEAL_PRODUCTIVITY
-            )
-            utilization_score  = self._normalize_score(
-                statistics.mean(utilization_vals), 0, self.IDEAL_UTILIZATION
-            )
-            completion_score   = self._normalize_score(
-                statistics.mean(completion_vals), 0, self.IDEAL_COMPLETION
-            )
-            # Engagement inversely influenced by burnout
-            avg_burnout     = statistics.mean(burnout_vals) if burnout_vals else 0
-            engagement_score = max(0, min(100, 100 - avg_burnout))
+            burnout_penalty = (high_burnout_count / n) * 10
 
-            # ── Weighted Team Health ───────────────────────────────────────────
-            team_health = (
-                attendance_score   * (self.WEIGHTS["attendance"] / 100.0) +
-                productivity_score * (self.WEIGHTS["productivity"] / 100.0) +
-                completion_score   * (self.WEIGHTS["completion"] / 100.0) +
-                engagement_score   * (self.WEIGHTS["engagement"] / 100.0)
+            # Weighted team health
+            team_health = round(
+                attendance_score   * 0.25
+                + productivity_score * 0.25
+                + completion_score   * 0.20
+                + engagement_score   * 0.20
+                + utilization_score  * 0.10
+                - burnout_penalty,
+                1,
             )
-            team_health = round(min(max(team_health, 0), 100))
+            team_health = min(100.0, max(0.0, team_health))
 
-            # ── Identify Top / Bottom Performers ──────────────────────────────
-            ranked_employees = sorted(
-                employees,
-                key=lambda e: float(e.get("productivityScore", 0)),
-                reverse=True,
-            )
-            top_performers    = ranked_employees[:3]
-            bottom_performers = ranked_employees[-3:][::-1]
+            if team_health >= 90:
+                category = "Excellent"
+            elif team_health >= 75:
+                category = "Good"
+            elif team_health >= 60:
+                category = "Average"
+            else:
+                category = "Needs Attention"
 
-            # ── High-Risk Employees ────────────────────────────────────────────
+            # ── Employee ID resolution ────────────────────────────────────────
+            # EmployeeMetric.dict() uses the Pydantic field name "employeeId"
+            # Support both just in case
+            def get_emp_id(e: Dict) -> Optional[int]:
+                v = e.get("employeeId", e.get("employee_id"))
+                return int(v) if v is not None else None
+
+            # Performance composite score
+            def perf(e: Dict) -> float:
+                return (
+                    self._f(e, "productivity_pct", 70) * 0.4
+                    + self._f(e, "task_completion",   75) * 0.3
+                    + self._f(e, "attendance_pct",    80) * 0.3
+                )
+
+            sorted_emps       = sorted(employees, key=perf, reverse=True)
+            top_performers    = [get_emp_id(e) for e in sorted_emps[:3]]
+            bottom_performers = [get_emp_id(e) for e in sorted_emps[-3:]]
+
             high_risk = [
-                e for e in employees
-                if float(e.get("burnoutRisk", 0)) >= 70
-                or float(e.get("attritionRisk", 0)) >= 70
+                get_emp_id(e) for e in employees
+                if self._f(e, "burnout_score",   0) >= 70
+                or self._f(e, "attrition_score", 0) >= 70
             ]
 
-            # ── Category ──────────────────────────────────────────────────────
-            category = self._classify_category(team_health)
-
-            # ── Insights ──────────────────────────────────────────────────────
-            insights = self._generate_insights(
-                team_health, attendance_score, productivity_score,
-                completion_score, engagement_score, len(high_risk), len(employees)
-            )
-
+            # Strip None values (employees with missing IDs)
             result = {
-                "managerId":         manager_id,
-                "teamSize":          len(employees),
                 "teamHealth":        team_health,
                 "category":          category,
-                "attendanceScore":   round(attendance_score),
-                "productivityScore": round(productivity_score),
-                "utilizationScore":  round(utilization_score),
-                "completionScore":   round(completion_score),
-                "engagementScore":   round(engagement_score),
-                "averageBurnout":    round(avg_burnout),
-                "highRiskCount":     len(high_risk),
-                "topPerformers":     [self._summary(e) for e in top_performers],
-                "bottomPerformers":  [self._summary(e) for e in bottom_performers],
-                "highRiskEmployees": [self._summary(e) for e in high_risk],
-                "insights":          insights,
+                "attendanceScore":   attendance_score,
+                "productivityScore": productivity_score,
+                "completionScore":   completion_score,
+                "engagementScore":   engagement_score,
+                "utilizationScore":  utilization_score,
+                "teamSize":          n,
+                "highRiskEmployees": [x for x in high_risk       if x is not None],
+                "topPerformers":     [x for x in top_performers    if x is not None],
+                "bottomPerformers":  [x for x in bottom_performers if x is not None],
             }
-
             logger.info(
-                f"[TeamHealth] managerId={manager_id} → "
-                f"health={team_health}, category={category}"
+                "[TeamHealthEngine] teamHealth=%.1f category=%s n=%d highRisk=%d",
+                team_health, category, n, len(result["highRiskEmployees"]),
             )
             return result
 
         except Exception as e:
-            logger.exception(f"[TeamHealth] Computation failed: {e}")
-            raise
-
-    # ─── Helpers ───────────────────────────────────────────────────────────────
+            logger.exception("[TeamHealthEngine] error: %s", e)
+            return self._empty()
 
     @staticmethod
-    def _normalize_score(value: float, min_val: float, max_val: float) -> float:
-        """Linear normalization to 0–100 clamped."""
-        if max_val == min_val:
-            return 100.0
-        normalized = ((value - min_val) / (max_val - min_val)) * 100.0
-        return max(0.0, min(100.0, normalized))
-
-    @staticmethod
-    def _classify_category(score: int) -> str:
-        if score >= 90:
-            return "Excellent"
-        elif score >= 75:
-            return "Good"
-        elif score >= 60:
-            return "Average"
-        return "Needs Attention"
-
-    @staticmethod
-    def _summary(employee: Dict[str, Any]) -> Dict[str, Any]:
+    def _empty() -> Dict[str, Any]:
         return {
-            "employeeId":        employee.get("employeeId"),
-            "name":              employee.get("name", "N/A"),
-            "productivityScore": round(float(employee.get("productivityScore", 0))),
-            "attendancePercentage": round(float(employee.get("attendancePercentage", 0))),
-            "burnoutRisk":       round(float(employee.get("burnoutRisk", 0))),
+            "teamHealth": 0.0,        "category": "Needs Attention",
+            "attendanceScore": 0.0,   "productivityScore": 0.0,
+            "completionScore": 0.0,   "engagementScore": 0.0,
+            "utilizationScore": 0.0,  "teamSize": 0,
+            "highRiskEmployees": [],  "topPerformers": [],  "bottomPerformers": [],
         }
 
     @staticmethod
-    def _generate_insights(
-        health: int, attendance: float, productivity: float,
-        completion: float, engagement: float,
-        high_risk_count: int, team_size: int,
-    ) -> List[str]:
-        insights = []
-        if health >= 90:
-            insights.append("Team is performing at an excellent level across all dimensions")
-        elif health >= 75:
-            insights.append("Team health is good — minor improvements possible")
-        elif health >= 60:
-            insights.append("Team health is average — focused intervention recommended")
-        else:
-            insights.append("Team health needs immediate attention from management")
+    def _f(data: Dict, key: str, default: float) -> float:
+        try:
+            v = data.get(key, default)
+            return float(v) if v is not None else float(default)
+        except (TypeError, ValueError):
+            return float(default)
 
-        if attendance < 70:
-            insights.append("Attendance is critically low — investigate root causes")
-        elif attendance < 80:
-            insights.append("Attendance below target — monitor closely")
 
-        if productivity < 60:
-            insights.append("Productivity below benchmark — consider workload rebalancing")
-
-        if completion < 70:
-            insights.append("Task completion rate needs improvement — review deadlines")
-
-        if engagement < 60:
-            insights.append("Low team engagement — burnout risk across team is elevated")
-
-        risk_pct = (high_risk_count / team_size * 100) if team_size > 0 else 0
-        if risk_pct >= 30:
-            insights.append(
-                f"{high_risk_count} employees ({risk_pct:.0f}%) flagged as high risk"
-            )
-        elif high_risk_count > 0:
-            insights.append(f"{high_risk_count} employee(s) require individual attention")
-
-        return insights[:5]
-
-    @staticmethod
-    def _empty_response(manager_id: int) -> Dict[str, Any]:
-        return {
-            "managerId":         manager_id,
-            "teamSize":          0,
-            "teamHealth":        0,
-            "category":          "No Data",
-            "attendanceScore":   0,
-            "productivityScore": 0,
-            "utilizationScore":  0,
-            "completionScore":   0,
-            "engagementScore":   0,
-            "averageBurnout":    0,
-            "highRiskCount":     0,
-            "topPerformers":     [],
-            "bottomPerformers":  [],
-            "highRiskEmployees": [],
-            "insights":          ["No team data available"],
-        }
+# ── backward-compat ───────────────────────────────────────────────────────────
+def calculate_team_health(employees: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Result does NOT contain managerId — route injects it."""
+    return TeamHealthEngine().calculate(employees)

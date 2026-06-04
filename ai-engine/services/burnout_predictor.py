@@ -1,7 +1,10 @@
 """
-Burnout Detection Engine
-Predicts employee burnout risk based on behavioral and workload metrics.
-Fully deterministic — no external APIs required.
+AI-4A: Burnout Detection Engine
+Matches the field names sent by burnout_routes.py (YOUR existing file):
+  attendancePercentage, monthlyHoursWorked, dailyAverageHours,
+  pendingTasks, overdueTasks, utilizationPercentage,
+  consecutiveWorkDays, reportsTotal, reportsSubmitted
+Also supports the snake_case aliases used in the GET query-param path.
 """
 
 import logging
@@ -12,228 +15,228 @@ logger = logging.getLogger(__name__)
 
 class BurnoutPredictor:
     """
-    Burnout Risk Scoring Engine.
-    
-    Uses a weighted multi-factor scoring model to estimate burnout risk.
-    Score range: 0 (no risk) → 100 (extreme risk).
+    Stateless burnout risk calculator.
+    Instantiate once (module-level) and call .predict(data) per request.
+
+    Accepts both camelCase (from POST body via BurnoutRequest) and
+    snake_case (from GET query params) field names so either call path works.
     """
 
-    # ─── Thresholds ────────────────────────────────────────────────────────────
-    NORMAL_DAILY_HOURS = 8.0          # Expected daily work hours
-    MAX_HEALTHY_DAILY_HOURS = 9.0     # Above this → stress zone
-    CRITICAL_DAILY_HOURS = 11.0       # Above this → danger zone
+    HIGH_THRESHOLD   = 70
+    MEDIUM_THRESHOLD = 40
 
-    NORMAL_MONTHLY_HOURS = 176.0      # 22 working days × 8 hrs
-    CRITICAL_MONTHLY_HOURS = 220.0    # Sustained overwork threshold
-
-    HEALTHY_ATTENDANCE = 90.0         # %
-    LOW_ATTENDANCE = 75.0             # % — potential disengagement
-
-    MAX_HEALTHY_PENDING = 3           # tasks
-    CRITICAL_PENDING = 7              # tasks
-
-    MAX_HEALTHY_OVERDUE = 1           # tasks
-    CRITICAL_OVERDUE = 4              # tasks
-
-    HEALTHY_UTILIZATION = 75.0        # %
-    CRITICAL_UTILIZATION = 95.0       # %
-
-    CRITICAL_CONSECUTIVE_DAYS = 10    # days without break
-    REPORT_SUBMISSION_THRESHOLD = 0.7 # below 70% → inconsistency flag
-
-    # ─── Weight Distribution (total = 100) ─────────────────────────────────────
-    WEIGHTS = {
-        "daily_hours":        25,
-        "monthly_hours":      20,
-        "pending_tasks":      18,
-        "overdue_tasks":      17,
-        "utilization":        10,
-        "consecutive_days":   6,
-        "attendance":         4,
-    }
-
-    def predict(self, employee_data: Dict[str, Any]) -> Dict[str, Any]:
+    # ── Normalise incoming dict to a consistent internal key set ─────────────
+    def _normalise(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Compute burnout risk score and return structured response.
+        Maps camelCase keys (from BurnoutRequest.dict()) AND
+        snake_case keys (legacy / GET path) to a single internal set.
+        Always safe — missing keys fall back to sensible defaults.
+        """
+        def pick(*keys, default=0.0):
+            for k in keys:
+                v = data.get(k)
+                if v is not None:
+                    return v
+            return default
 
-        Args:
-            employee_data: Dict containing employee metrics.
+        return {
+            "employee_id":             pick("employeeId", "employee_id",          default=None),
+            "attendance_pct":          pick("attendancePercentage",  "attendance_pct",          default=90.0),
+            "monthly_hours":           pick("monthlyHoursWorked",    "monthly_hours",            default=176.0),
+            "daily_avg_hours":         pick("dailyAverageHours",     "daily_avg_hours",          default=8.0),
+            "pending_tasks":           pick("pendingTasks",          "pending_tasks",            default=0),
+            "overdue_tasks":           pick("overdueTasks",          "overdue_tasks",            default=0),
+            "utilization_pct":         pick("utilizationPercentage", "utilization_pct",          default=70.0),
+            "consecutive_work_days":   pick("consecutiveWorkDays",   "consecutive_work_days",    default=5),
+            "reports_submitted":       pick("reportsSubmitted",      "reports_submitted",        default=20),
+            "total_reports_expected":  pick("reportsTotal",          "total_reports_expected",   default=20),
+        }
 
-        Returns:
-            Dict with burnoutRisk, level, reasons, and factor breakdown.
+    def predict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Returns a dict that satisfies BurnoutResponse:
+            employeeId   : int
+            burnoutRisk  : int
+            level        : str
+            reasons      : List[str]
+            factorScores : Dict[str, int]   ← required by your BurnoutResponse model
         """
         try:
-            employee_id = employee_data.get("employeeId", 0)
-            logger.info(f"[Burnout] Computing risk for employeeId={employee_id}")
-
-            # ── Extract & Sanitize Inputs ──────────────────────────────────────
-            daily_hours      = float(employee_data.get("dailyAverageHours", 8.0))
-            monthly_hours    = float(employee_data.get("monthlyHoursWorked", 176.0))
-            attendance_pct   = float(employee_data.get("attendancePercentage", 100.0))
-            pending_tasks    = int(employee_data.get("pendingTasks", 0))
-            overdue_tasks    = int(employee_data.get("overdueTasks", 0))
-            utilization_pct  = float(employee_data.get("utilizationPercentage", 70.0))
-            consec_days      = int(employee_data.get("consecutiveWorkDays", 5))
-            reports_total    = int(employee_data.get("reportsTotal", 20))
-            reports_sub      = int(employee_data.get("reportsSubmitted", 20))
-
-            # ── Individual Factor Scores (0–100 each) ─────────────────────────
-            scores = {}
+            n   = self._normalise(data)
+            score = 0.0
             reasons: List[str] = []
 
-            # Factor 1: Daily Average Hours
-            scores["daily_hours"] = self._score_daily_hours(daily_hours, reasons)
+            # Individual component scores kept for factorScores
+            hours_pts   = 0.0
+            task_pts    = 0.0
+            util_pts    = 0.0
+            consec_pts  = 0.0
+            att_pts     = 0.0
+            report_pts  = 0.0
 
-            # Factor 2: Monthly Hours
-            scores["monthly_hours"] = self._score_monthly_hours(monthly_hours, reasons)
+            # ── 1. Hours component (max 25 pts) ──────────────────────────────
+            daily_avg     = self._f(n, "daily_avg_hours",  0)
+            monthly_hours = self._f(n, "monthly_hours",    0)
 
-            # Factor 3: Pending Tasks
-            scores["pending_tasks"] = self._score_pending_tasks(pending_tasks, reasons)
+            if daily_avg > 10:
+                hours_pts += 25
+                reasons.append("Daily working hours critically exceed safe limits (>10 hrs)")
+            elif daily_avg > 9:
+                hours_pts += 20
+                reasons.append("Daily working hours significantly exceed safe limits (>9 hrs)")
+            elif daily_avg > 8:
+                hours_pts += 12
+                reasons.append("Work hours exceed team average")
+            elif daily_avg > 7:
+                hours_pts += 5
 
-            # Factor 4: Overdue Tasks
-            scores["overdue_tasks"] = self._score_overdue_tasks(overdue_tasks, reasons)
+            if monthly_hours > 220:
+                hours_pts += 10
+                reasons.append("Monthly hours critically high (>220 hrs)")
+            elif monthly_hours > 190:
+                hours_pts += 5
+                reasons.append("Monthly hours above healthy threshold")
 
-            # Factor 5: Utilization
-            scores["utilization"] = self._score_utilization(utilization_pct, reasons)
+            # ── 2. Task pressure (max 25 pts) ────────────────────────────────
+            overdue = self._i(n, "overdue_tasks", 0)
+            pending = self._i(n, "pending_tasks", 0)
 
-            # Factor 6: Consecutive Work Days
-            scores["consecutive_days"] = self._score_consecutive_days(consec_days, reasons)
+            if overdue >= 5:
+                task_pts += 25
+                reasons.append("Multiple overdue tasks creating significant pressure")
+            elif overdue >= 3:
+                task_pts += 18
+                reasons.append("Several overdue tasks detected")
+            elif overdue >= 1:
+                task_pts += 8
+                reasons.append("Overdue tasks present")
 
-            # Factor 7: Attendance (low attendance can be early burnout signal)
-            scores["attendance"] = self._score_attendance(attendance_pct, reasons)
+            if pending >= 10:
+                task_pts += 10
+                reasons.append("High workload — excessive pending tasks")
+            elif pending >= 6:
+                task_pts += 5
+                reasons.append("Elevated pending task count")
 
-            # ── Weighted Final Score ───────────────────────────────────────────
-            burnout_score = sum(
-                scores[factor] * (self.WEIGHTS[factor] / 100.0)
-                for factor in self.WEIGHTS
-            )
-            burnout_score = round(min(max(burnout_score, 0), 100))
+            # ── 3. Utilization (max 20 pts) ───────────────────────────────────
+            utilization = self._f(n, "utilization_pct", 0)
 
-            # ── Risk Level Classification ──────────────────────────────────────
-            level = self._classify_level(burnout_score)
+            if utilization > 95:
+                util_pts += 20
+                reasons.append("Utilization at critical level (>95%)")
+            elif utilization > 85:
+                util_pts += 14
+                reasons.append("Very high utilization rate")
+            elif utilization > 75:
+                util_pts += 7
+                reasons.append("Above-average utilization")
 
-            # ── Deduplicate & Limit Reasons ────────────────────────────────────
-            reasons = list(dict.fromkeys(reasons))[:5]
+            # ── 4. Consecutive work days (max 15 pts) ─────────────────────────
+            consec = self._i(n, "consecutive_work_days", 0)
+
+            if consec >= 14:
+                consec_pts += 15
+                reasons.append("Working without rest for 2+ weeks continuously")
+            elif consec >= 10:
+                consec_pts += 10
+                reasons.append("Extended work streak without adequate break")
+            elif consec >= 7:
+                consec_pts += 5
+                reasons.append("Working entire week without rest")
+
+            # ── 5. Attendance (max 10 pts) ────────────────────────────────────
+            attendance = self._f(n, "attendance_pct", 100)
+
+            if attendance < 60 and (overdue >= 2 or utilization > 70):
+                att_pts += 10
+                reasons.append("Low attendance combined with high workload pressure")
+            elif attendance < 70:
+                att_pts += 5
+                reasons.append("Below-average attendance may indicate stress")
+
+            # ── 6. Report consistency (max 5 pts) ────────────────────────────
+            submitted = self._i(n, "reports_submitted",      0)
+            expected  = self._i(n, "total_reports_expected", 1)   # never 0
+            report_rate = (submitted / expected * 100) if expected > 0 else 100
+
+            if report_rate < 40:
+                report_pts += 5
+                reasons.append("Very low report submission — possible disengagement")
+            elif report_rate < 60:
+                report_pts += 2
+
+            # ── Totals ────────────────────────────────────────────────────────
+            score = hours_pts + task_pts + util_pts + consec_pts + att_pts + report_pts
+            final_score = int(min(100, max(0, round(score))))
+
+            if final_score >= self.HIGH_THRESHOLD:
+                level = "HIGH"
+            elif final_score >= self.MEDIUM_THRESHOLD:
+                level = "MEDIUM"
+            else:
+                level = "LOW"
+
             if not reasons:
-                reasons = ["No significant burnout indicators detected"]
+                reasons.append("Work patterns are within healthy limits")
 
-            result = {
-                "employeeId":    employee_id,
-                "burnoutRisk":   burnout_score,
-                "level":         level,
-                "reasons":       reasons,
-                "factorScores":  {k: round(v) for k, v in scores.items()},
+            # factorScores — each component capped to its own max, as int
+            factor_scores: Dict[str, int] = {
+                "hours":       int(min(35, hours_pts)),   # max possible = 25+10 = 35
+                "tasks":       int(min(35, task_pts)),    # max possible = 25+10 = 35
+                "utilization": int(min(20, util_pts)),
+                "consecutive": int(min(15, consec_pts)),
+                "attendance":  int(min(10, att_pts)),
+                "reports":     int(min(5,  report_pts)),
             }
 
+            result = {
+                "employeeId":   data.get("employeeId", data.get("employee_id")),
+                "burnoutRisk":  final_score,
+                "level":        level,
+                "reasons":      reasons[:5],
+                "factorScores": factor_scores,
+            }
             logger.info(
-                f"[Burnout] employeeId={employee_id} → score={burnout_score}, level={level}"
+                "[BurnoutPredictor] employee=%s score=%d level=%s",
+                result["employeeId"], final_score, level,
             )
             return result
 
         except Exception as e:
-            logger.exception(f"[Burnout] Prediction failed: {e}")
-            raise
+            logger.exception("[BurnoutPredictor] Unexpected error: %s", e)
+            return {
+                "employeeId":   data.get("employeeId", data.get("employee_id")),
+                "burnoutRisk":  0,
+                "level":        "LOW",
+                "reasons":      ["Unable to calculate — insufficient data"],
+                "factorScores": {
+                    "hours": 0, "tasks": 0, "utilization": 0,
+                    "consecutive": 0, "attendance": 0, "reports": 0,
+                },
+            }
 
-    # ─── Factor Scoring Methods ────────────────────────────────────────────────
-
-    def _score_daily_hours(self, daily_hours: float, reasons: List[str]) -> float:
-        if daily_hours <= self.NORMAL_DAILY_HOURS:
-            return 0.0
-        elif daily_hours <= self.MAX_HEALTHY_DAILY_HOURS:
-            reasons.append("Work hours slightly above normal range")
-            return 30.0
-        elif daily_hours <= self.CRITICAL_DAILY_HOURS:
-            reasons.append("Work hours significantly exceed recommended limit")
-            return 65.0
-        else:
-            reasons.append("Extreme daily work hours detected — critical overwork")
-            return 100.0
-
-    def _score_monthly_hours(self, monthly_hours: float, reasons: List[str]) -> float:
-        if monthly_hours <= self.NORMAL_MONTHLY_HOURS:
-            return 0.0
-        elif monthly_hours <= 200:
-            reasons.append("Monthly hours above standard workload")
-            return 35.0
-        elif monthly_hours <= self.CRITICAL_MONTHLY_HOURS:
-            reasons.append("Sustained high monthly workload")
-            return 70.0
-        else:
-            reasons.append("Monthly hours at burnout-critical level")
-            return 100.0
-
-    def _score_pending_tasks(self, pending: int, reasons: List[str]) -> float:
-        if pending <= self.MAX_HEALTHY_PENDING:
-            return 0.0
-        elif pending <= 5:
-            reasons.append("Elevated number of pending tasks")
-            return 40.0
-        elif pending <= self.CRITICAL_PENDING:
-            reasons.append("High number of pending tasks increasing workload pressure")
-            return 70.0
-        else:
-            reasons.append("Task backlog at critical level")
-            return 100.0
-
-    def _score_overdue_tasks(self, overdue: int, reasons: List[str]) -> float:
-        if overdue == 0:
-            return 0.0
-        elif overdue <= self.MAX_HEALTHY_OVERDUE:
-            reasons.append("Minor overdue task detected")
-            return 25.0
-        elif overdue <= 2:
-            reasons.append("Multiple overdue tasks indicating workload strain")
-            return 55.0
-        elif overdue <= self.CRITICAL_OVERDUE:
-            reasons.append("High overdue task count — sustained stress indicator")
-            return 80.0
-        else:
-            reasons.append("Critical overdue task accumulation")
-            return 100.0
-
-    def _score_utilization(self, utilization: float, reasons: List[str]) -> float:
-        if utilization <= self.HEALTHY_UTILIZATION:
-            return 0.0
-        elif utilization <= 85.0:
-            reasons.append("Utilization approaching upper healthy limit")
-            return 30.0
-        elif utilization <= self.CRITICAL_UTILIZATION:
-            reasons.append("High utilization rate — limited recovery bandwidth")
-            return 65.0
-        else:
-            reasons.append("Utilization beyond sustainable capacity")
-            return 100.0
-
-    def _score_consecutive_days(self, days: int, reasons: List[str]) -> float:
-        if days <= 5:
-            return 0.0
-        elif days <= 7:
-            reasons.append("Working through weekends without adequate rest")
-            return 40.0
-        elif days <= self.CRITICAL_CONSECUTIVE_DAYS:
-            reasons.append("Extended consecutive work stretch without break")
-            return 70.0
-        else:
-            reasons.append("Critically long consecutive work streak — rest deficit")
-            return 100.0
-
-    def _score_attendance(self, attendance: float, reasons: List[str]) -> float:
-        """
-        Low attendance can be an early burnout manifestation (avoidance behavior).
-        """
-        if attendance >= self.HEALTHY_ATTENDANCE:
-            return 0.0
-        elif attendance >= self.LOW_ATTENDANCE:
-            reasons.append("Attendance declining — possible early disengagement")
-            return 45.0
-        else:
-            reasons.append("Significantly low attendance — may reflect burnout avoidance")
-            return 80.0
+    # ── Type-safe helpers ─────────────────────────────────────────────────────
+    @staticmethod
+    def _f(data: Dict, key: str, default: float) -> float:
+        try:
+            v = data.get(key, default)
+            return float(v) if v is not None else float(default)
+        except (TypeError, ValueError):
+            return float(default)
 
     @staticmethod
-    def _classify_level(score: int) -> str:
-        if score >= 70:
-            return "HIGH"
-        elif score >= 40:
-            return "MEDIUM"
-        return "LOW"
+    def _i(data: Dict, key: str, default: int) -> int:
+        try:
+            v = data.get(key, default)
+            return int(float(v)) if v is not None else int(default)
+        except (TypeError, ValueError):
+            return int(default)
+
+
+# ── Module-level backward-compat wrapper ─────────────────────────────────────
+def calculate_burnout_risk(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Kept for any code that imports the old function name.
+    The result includes factorScores so it is safe for BurnoutResponse.
+    """
+    return BurnoutPredictor().predict(data)
