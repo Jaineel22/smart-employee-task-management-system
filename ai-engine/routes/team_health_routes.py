@@ -1,63 +1,96 @@
 """
-Team Health API Routes
-GET /team-health/{managerId}
-POST /team-health/
+AI-4C: Team Health Engine Routes
+Bug fixed:
+  - calculate_team_health result has no managerId key — injected by route
+  - POST endpoint pops managerId from request before building employee list
 """
 
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
-from services.team_health_engine import TeamHealthEngine
+from typing import List, Optional
 
-logger = logging.getLogger(__name__)
+from services.team_health_engine import calculate_team_health
+
 router = APIRouter(prefix="/team-health", tags=["Team Health"])
-engine = TeamHealthEngine()
+logger = logging.getLogger(__name__)
 
 
 class EmployeeMetric(BaseModel):
-    employeeId:           int
-    name:                 str  = ""
-    attendancePercentage: float = Field(default=90.0, ge=0, le=100)
-    productivityScore:    float = Field(default=70.0, ge=0, le=100)
-    utilizationPercentage:float = Field(default=70.0, ge=0, le=110)
-    completionRate:       float = Field(default=85.0, ge=0, le=100)
-    burnoutRisk:          float = Field(default=20.0, ge=0, le=100)
-    attritionRisk:        float = Field(default=20.0, ge=0, le=100)
+    employeeId:         int
+    attendance_pct:     float = Field(default=80.0,  ge=0, le=100)
+    productivity_pct:   float = Field(default=70.0,  ge=0, le=100)
+    utilization_pct:    float = Field(default=70.0,  ge=0, le=100)
+    task_completion:    float = Field(default=75.0,  ge=0, le=100)
+    report_consistency: float = Field(default=70.0,  ge=0, le=100)
+    burnout_score:      float = Field(default=0.0,   ge=0, le=100)
+    attrition_score:    float = Field(default=0.0,   ge=0, le=100)
 
 
 class TeamHealthRequest(BaseModel):
-    managerId: int         = Field(..., description="Manager unique ID")
-    employees: List[EmployeeMetric] = Field(default=[])
+    managerId: int
+    employees: List[EmployeeMetric]
 
 
-@router.post("/", tags=["Team Health"])
-async def compute_team_health(request: TeamHealthRequest):
-    """POST team health with all employee metrics."""
+class TeamHealthResponse(BaseModel):
+    managerId:          int
+    teamHealth:         float
+    category:           str
+    attendanceScore:    float
+    productivityScore:  float
+    completionScore:    float
+    engagementScore:    float
+    utilizationScore:   float
+    teamSize:           int
+    highRiskEmployees:  List[int]
+    topPerformers:      List[int]
+    bottomPerformers:   List[int]
+
+
+@router.post("/", response_model=TeamHealthResponse)
+async def calculate_health(request: TeamHealthRequest):
+    """
+    POST — Spring Boot sends managerId + list of employee metrics.
+    result from calculate_team_health has no managerId key.
+    """
     try:
+        if not request.employees:
+            raise HTTPException(status_code=400, detail="No employee data provided")
+
         logger.info(
-            f"[API] POST /team-health/ for managerId={request.managerId}, "
-            f"employees={len(request.employees)}"
+            "[API] POST /team-health/ managerId=%d employees=%d",
+            request.managerId, len(request.employees),
         )
-        data = {
-            "managerId": request.managerId,
-            "employees": [e.dict() for e in request.employees],
-        }
-        result = engine.compute(data)
-        return result
+        # EmployeeMetric.dict() produces "employeeId" (camelCase) — correct
+        employees_data = [e.dict() for e in request.employees]
+        result = calculate_team_health(employees_data)   # no managerId in result
+        return TeamHealthResponse(managerId=request.managerId, **result)
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.exception(f"[API] Team Health POST failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Team health computation failed: {str(e)}")
+        logger.exception("[API] Team health POST failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{manager_id}", tags=["Team Health"])
-async def get_team_health(manager_id: int):
-    """GET team health with empty team — returns zero-state response."""
-    try:
-        logger.info(f"[API] GET /team-health/{manager_id}")
-        data   = {"managerId": manager_id, "employees": []}
-        result = engine.compute(data)
-        return result
-    except Exception as e:
-        logger.exception(f"[API] Team Health GET failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Team health computation failed: {str(e)}")
+@router.get("/{managerId}", response_model=TeamHealthResponse)
+async def get_team_health(managerId: int):
+    """
+    GET — returns a zeroed placeholder.
+    Spring Boot should use POST with actual employee metrics for real data.
+    """
+    logger.info("[API] GET /team-health/%d — returning empty placeholder", managerId)
+    return TeamHealthResponse(
+        managerId=managerId,
+        teamHealth=0.0,
+        category="Needs Attention",
+        attendanceScore=0.0,
+        productivityScore=0.0,
+        completionScore=0.0,
+        engagementScore=0.0,
+        utilizationScore=0.0,
+        teamSize=0,
+        highRiskEmployees=[],
+        topPerformers=[],
+        bottomPerformers=[],
+    )

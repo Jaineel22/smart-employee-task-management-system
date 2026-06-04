@@ -1,63 +1,76 @@
 """
-Growth Forecast API Routes
-GET /forecast/{employeeId}
-POST /forecast/
+AI-4E: Growth Forecast Routes
+Bug fixed: pop employeeId before calling service; result has no employeeId key.
+monthlyForecast items are plain dicts — Pydantic coerces them into MonthlyForecast.
 """
 
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List
-from services.growth_forecast import GrowthForecastEngine
 
-logger = logging.getLogger(__name__)
+from services.growth_forecast import forecast_growth
+
 router = APIRouter(prefix="/forecast", tags=["Growth Forecast"])
-engine = GrowthForecastEngine()
+logger = logging.getLogger(__name__)
 
 
 class ForecastRequest(BaseModel):
     employeeId:           int         = Field(..., description="Employee unique ID")
-    productivityHistory:  List[float] = Field(default=[], description="Monthly productivity scores")
-    currentProductivity:  float       = Field(default=65.0, ge=0, le=100)
+    productivity_history: List[float] = Field(default_factory=list)
+    current_productivity: float       = Field(default=70.0, ge=0, le=100)
+    burnout_score:        float       = Field(default=0.0,  ge=0, le=100)
+    utilization_pct:      float       = Field(default=70.0, ge=0, le=100)
+    attendance_pct:       float       = Field(default=80.0, ge=0, le=100)
+
+
+class MonthlyForecast(BaseModel):
+    month:                  int
+    predictedProductivity:  float
 
 
 class ForecastResponse(BaseModel):
-    employeeId:                   int
-    currentProductivity:          int
-    smoothedProductivity:         int
-    predictedProductivity1Month:  int
-    predictedProductivity3Months: int
-    predictedProductivity6Months: int
-    improvement3Months:           int
-    improvement6Months:           int
-    trendDirection:               str
-    trendPerMonth:                float
-    confidence:                   int
-    dataPoints:                   int
-    historicalData:               List[int]
+    employeeId:                     int
+    currentProductivity:            float
+    predictedProductivity3Months:   float
+    improvement:                    float
+    trend:                          str
+    monthlyForecast:                List[MonthlyForecast]
 
 
-@router.get("/{employee_id}", response_model=ForecastResponse)
-async def get_forecast(employee_id: int):
-    """GET forecast with minimal data — returns stable forecast."""
+@router.get("/{employeeId}", response_model=ForecastResponse)
+async def get_forecast(
+    employeeId:           int,
+    current_productivity: float = 70.0,
+    burnout_score:        float = 0.0,
+    utilization_pct:      float = 70.0,
+    attendance_pct:       float = 80.0,
+):
+    """GET — pass metrics as query params. History requires POST."""
     try:
-        logger.info(f"[API] GET /forecast/{employee_id}")
-        data   = {"employeeId": employee_id, "productivityHistory": [65.0]}
-        result = engine.forecast(data)
-        return result
+        logger.info("[API] GET /forecast/%d", employeeId)
+        data = {
+            "productivity_history": [],
+            "current_productivity": current_productivity,
+            "burnout_score":        burnout_score,
+            "utilization_pct":      utilization_pct,
+            "attendance_pct":       attendance_pct,
+        }
+        result = forecast_growth(data)   # no employeeId in result
+        return ForecastResponse(employeeId=employeeId, **result)
     except Exception as e:
-        logger.exception(f"[API] Forecast GET failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Forecast computation failed: {str(e)}")
+        logger.exception("[API] Forecast GET failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/", response_model=ForecastResponse)
-async def compute_forecast(request: ForecastRequest):
-    """POST forecast with historical productivity data."""
+async def create_forecast(request: ForecastRequest):
     try:
-        logger.info(f"[API] POST /forecast/ for employeeId={request.employeeId}")
-        data   = request.dict()
-        result = engine.forecast(data)
-        return result
+        logger.info("[API] POST /forecast/ employeeId=%d", request.employeeId)
+        data = request.dict()
+        emp_id = data.pop("employeeId")    # remove before passing to service
+        result = forecast_growth(data)     # no employeeId in result
+        return ForecastResponse(employeeId=emp_id, **result)
     except Exception as e:
-        logger.exception(f"[API] Forecast POST failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Forecast computation failed: {str(e)}")
+        logger.exception("[API] Forecast POST failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,21 +1,28 @@
 """
-Burnout Detection API Routes
-GET /burnout/{employeeId}
+AI-4A: Burnout Detection API Routes
+Matches YOUR existing burnout_routes.py exactly:
+  - BurnoutRequest uses camelCase field names
+  - BurnoutResponse includes factorScores: Dict[str, int]
+  - Module-level singleton: predictor = BurnoutPredictor()
+  - GET  /burnout/{employee_id}
+  - POST /burnout/
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import List, Dict
+
 from services.burnout_predictor import BurnoutPredictor
 
 logger    = logging.getLogger(__name__)
 router    = APIRouter(prefix="/burnout", tags=["Burnout Detection"])
-predictor = BurnoutPredictor()
+predictor = BurnoutPredictor()          # singleton — matches your app.py test endpoint
 
 
+# ── Request model (camelCase — matches Spring Boot payload) ──────────────────
 class BurnoutRequest(BaseModel):
-    employeeId:            int   = Field(..., description="Employee unique ID")
+    employeeId:            int   = Field(...,         description="Employee unique ID")
     attendancePercentage:  float = Field(default=90.0,  ge=0,   le=100)
     monthlyHoursWorked:    float = Field(default=176.0, ge=0)
     dailyAverageHours:     float = Field(default=8.0,   ge=0,   le=24)
@@ -27,6 +34,7 @@ class BurnoutRequest(BaseModel):
     reportsSubmitted:      int   = Field(default=20,    ge=0)
 
 
+# ── Response model (must match exactly what BurnoutPredictor.predict returns) ─
 class BurnoutResponse(BaseModel):
     employeeId:   int
     burnoutRisk:  int
@@ -35,33 +43,34 @@ class BurnoutResponse(BaseModel):
     factorScores: Dict[str, int]
 
 
+# ── GET /burnout/{employee_id} ────────────────────────────────────────────────
 @router.get("/{employee_id}", response_model=BurnoutResponse)
 async def get_burnout_score(employee_id: int):
     """
-    Returns burnout risk score for an employee.
-    Uses default values when called with just employeeId (GET).
+    Returns burnout risk score using default metric values.
+    Quick check — Spring Boot GET call with no body.
     """
     try:
-        logger.info(f"[API] GET /burnout/{employee_id}")
-        data   = {"employeeId": employee_id}
-        result = predictor.predict(data)
-        return result
+        logger.info("[API] GET /burnout/%d", employee_id)
+        # Pass employeeId so the predictor can echo it back
+        result = predictor.predict({"employeeId": employee_id})
+        return BurnoutResponse(**result)
     except Exception as e:
-        logger.exception(f"[API] Burnout GET failed: {e}")
+        logger.exception("[API] Burnout GET failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Burnout computation failed: {str(e)}")
 
 
+# ── POST /burnout/ ────────────────────────────────────────────────────────────
 @router.post("/", response_model=BurnoutResponse)
 async def compute_burnout(request: BurnoutRequest):
     """
-    Returns burnout risk with full employee metrics payload.
-    Called by Spring Boot with real employee data.
+    Full burnout risk computation with real employee metrics.
+    Called by Spring Boot WorkforceIntelligenceService with actual data.
     """
     try:
-        logger.info(f"[API] POST /burnout/ for employeeId={request.employeeId}")
-        data   = request.dict()
-        result = predictor.predict(data)
-        return result
+        logger.info("[API] POST /burnout/ employeeId=%d", request.employeeId)
+        result = predictor.predict(request.dict())
+        return BurnoutResponse(**result)
     except Exception as e:
-        logger.exception(f"[API] Burnout POST failed: {e}")
+        logger.exception("[API] Burnout POST failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Burnout computation failed: {str(e)}")
