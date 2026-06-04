@@ -1,184 +1,127 @@
 """
-Recommendation Engine
-Generates dynamic, context-aware AI recommendations for each employee.
-All recommendations are data-driven — no hardcoded responses.
+AI-4D: Recommendation Engine
+Dynamic, context-aware recommendations.
+Result does NOT contain employeeId — route injects it.
 """
 
 import logging
-import random
 from typing import Dict, Any, List, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Each rule: (condition_fn, recommendation_text, improvement_points)
+_RULES: List[Tuple] = [
+    # Attendance
+    (lambda d: d.get("attendance_pct", 100) < 65,
+     "Improve attendance consistency — aim for at least 80% monthly attendance", 6),
+    (lambda d: 65 <= d.get("attendance_pct", 100) < 75,
+     "Increase attendance rate to above 80% for better productivity scores", 4),
+
+    # Overdue / pending tasks
+    (lambda d: d.get("overdue_tasks", 0) >= 5,
+     "Prioritize clearing overdue tasks — set aside focused time blocks daily", 8),
+    (lambda d: 2 <= d.get("overdue_tasks", 0) < 5,
+     "Reduce overdue tasks by 50% in the next two weeks", 5),
+    (lambda d: d.get("pending_tasks", 0) >= 10,
+     "Break large pending task backlog into daily achievable sub-goals", 6),
+
+    # Utilization
+    (lambda d: d.get("utilization_pct", 70) > 90,
+     "Utilization is critically high — request workload redistribution from manager", 7),
+    (lambda d: d.get("utilization_pct", 70) < 50,
+     "Utilization is low — take on additional tasks to improve contribution scores", 5),
+
+    # Burnout
+    (lambda d: d.get("burnout_score", 0) >= 70,
+     "High burnout detected — schedule a recovery plan with mandatory rest days", 9),
+    (lambda d: 40 <= d.get("burnout_score", 0) < 70,
+     "Moderate burnout risk — limit overtime and focus on work-life balance", 5),
+
+    # Attrition
+    (lambda d: d.get("attrition_score", 0) >= 70,
+     "Significant disengagement signals — discuss career goals with your manager", 8),
+    (lambda d: 40 <= d.get("attrition_score", 0) < 70,
+     "Engagement slightly declining — set clear short-term objectives to regain focus", 4),
+
+    # Productivity
+    (lambda d: d.get("productivity_pct", 70) < 50,
+     "Productivity critically low — identify and eliminate top 3 time-wasting activities", 10),
+    (lambda d: 50 <= d.get("productivity_pct", 70) < 65,
+     "Use time-blocking techniques to improve daily productivity output", 6),
+    (lambda d: d.get("productivity_pct", 70) >= 85,
+     "Excellent productivity — consider mentoring teammates to sustain team performance", 3),
+
+    # Daily hours
+    (lambda d: d.get("daily_avg_hours", 8) > 9,
+     "Reduce daily working hours — sustained overwork degrades long-term output quality", 7),
+
+    # Report consistency
+    (lambda d: d.get("report_consistency", 80) < 50,
+     "Submit daily work reports consistently — this directly impacts efficiency scores", 5),
+    (lambda d: 50 <= d.get("report_consistency", 80) < 70,
+     "Improve report submission rate to above 80% for accurate productivity tracking", 3),
+
+    # Consecutive days
+    (lambda d: d.get("consecutive_work_days", 0) >= 10,
+     "Take a planned day off — continuous work streaks reduce cognitive performance", 6),
+]
+
 
 class RecommendationEngine:
-    """
-    Generates prioritized, actionable recommendations based on:
-    - Productivity score
-    - Burnout risk
-    - Attrition risk
-    - Attendance patterns
-    - Utilization rate
-    - Task backlog (pending + overdue)
-    """
+    """Generates personalised recommendations from employee metrics."""
 
-    def generate(self, employee_data: Dict[str, Any]) -> Dict[str, Any]:
+    def generate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Generate personalized recommendations for an employee.
-
-        Args:
-            employee_data: Aggregated employee metrics dict.
-
         Returns:
-            Dict with recommendations list and expected improvement %.
+            recommendations    List[str]
+            expectedImprovement int
+        NOTE: employeeId is NOT in the result — route injects it.
         """
         try:
-            employee_id = employee_data.get("employeeId", 0)
-            logger.info(f"[Recommendation] Generating for employeeId={employee_id}")
+            matched: List[Tuple[str, int]] = []
 
-            # ── Extract Inputs ─────────────────────────────────────────────────
-            productivity    = float(employee_data.get("productivityScore", 70.0))
-            burnout_risk    = float(employee_data.get("burnoutRisk", 30.0))
-            attrition_risk  = float(employee_data.get("attritionRisk", 20.0))
-            attendance      = float(employee_data.get("attendancePercentage", 90.0))
-            utilization     = float(employee_data.get("utilizationPercentage", 70.0))
-            pending_tasks   = int(employee_data.get("pendingTasks", 0))
-            overdue_tasks   = int(employee_data.get("overdueTasks", 0))
-            report_consist  = float(employee_data.get("reportConsistency", 1.0))
-            completion_rate = float(employee_data.get("completionRate", 85.0))
+            for condition, text, pts in _RULES:
+                try:
+                    if condition(data):
+                        matched.append((text, pts))
+                except Exception:
+                    continue
 
-            # ── Generate Prioritized Recommendations ───────────────────────────
-            recs: List[Tuple[int, str]] = []  # (priority, message)
+            # Sort by impact descending, cap at 6
+            matched.sort(key=lambda x: x[1], reverse=True)
+            top = matched[:6]
 
-            # ── Burnout Interventions ──────────────────────────────────────────
-            if burnout_risk >= 70:
-                recs.append((1, "Schedule immediate workload review with manager to prevent burnout"))
-                recs.append((1, f"Reduce daily working hours — currently exceeding healthy limits"))
-                recs.append((2, "Take at least one full recovery day this week"))
+            recommendations = [r for r, _ in top]
+            total_pts = sum(p for _, p in top)
+            expected_improvement = int(min(25, max(2, round(total_pts * 0.6))))
 
-            elif burnout_risk >= 40:
-                recs.append((2, "Monitor your work-life balance — burnout indicators are rising"))
-                recs.append((2, "Consider delegating lower-priority tasks to reduce pressure"))
-
-            # ── Attrition Interventions ────────────────────────────────────────
-            if attrition_risk >= 70:
-                recs.append((1, "Schedule a career growth conversation with your manager"))
-                recs.append((2, "Engage with team collaboration activities to rebuild connection"))
-
-            elif attrition_risk >= 40:
-                recs.append((3, "Share any workplace concerns with HR or management proactively"))
-
-            # ── Task Management ────────────────────────────────────────────────
-            if overdue_tasks >= 4:
-                recs.append((1, f"Urgently address {overdue_tasks} overdue tasks — prioritize by deadline impact"))
-            elif overdue_tasks >= 2:
-                recs.append((2, f"Clear {overdue_tasks} overdue tasks before accepting new assignments"))
-            elif overdue_tasks == 1:
-                recs.append((3, "Resolve the overdue task to maintain delivery consistency"))
-
-            if pending_tasks >= 7:
-                recs.append((2, f"Pending task backlog ({pending_tasks} tasks) needs structured planning"))
-            elif pending_tasks >= 4:
-                recs.append((3, f"Break down pending tasks into daily actionable chunks"))
-
-            # ── Productivity Improvements ──────────────────────────────────────
-            if productivity < 50:
-                recs.append((1, "Productivity is critically low — identify and remove key blockers"))
-                recs.append((2, "Set daily micro-goals to rebuild momentum and output consistency"))
-            elif productivity < 65:
-                recs.append((2, "Use time-blocking techniques to improve daily output"))
-                recs.append((3, "Review task prioritization strategy — focus on high-impact items"))
-            elif productivity < 80:
-                recs.append((3, "Slight productivity improvement possible — minimize context-switching"))
-
-            # ── Attendance ─────────────────────────────────────────────────────
-            if attendance < 70:
-                recs.append((1, f"Attendance at {attendance:.0f}% is critically low — address immediately"))
-            elif attendance < 80:
-                recs.append((2, f"Improve attendance consistency — currently at {attendance:.0f}%"))
-            elif attendance < 88:
-                recs.append((3, f"Attendance at {attendance:.0f}% — small improvements will boost reliability"))
-
-            # ── Utilization ────────────────────────────────────────────────────
-            if utilization < 50:
-                recs.append((3, "Low utilization detected — engage with manager on capacity allocation"))
-            elif utilization > 95:
-                recs.append((2, "Utilization critically high — request workload rebalancing"))
-            elif utilization > 85:
-                recs.append((3, "High utilization rate — ensure recovery time is built into schedule"))
-
-            # ── Report Submission ──────────────────────────────────────────────
-            if report_consist < 0.5:
-                recs.append((1, "Improve report submission rate — currently below 50%"))
-            elif report_consist < 0.75:
-                recs.append((2, "Submit daily/weekly reports consistently to demonstrate engagement"))
-
-            # ── Completion Rate ────────────────────────────────────────────────
-            if completion_rate < 60:
-                recs.append((2, f"Task completion rate ({completion_rate:.0f}%) needs significant improvement"))
-            elif completion_rate < 75:
-                recs.append((3, f"Aim to complete at least 80% of assigned tasks per sprint"))
-
-            # ── Default Positive Recommendation ───────────────────────────────
-            if not recs or all(p >= 3 for p, _ in recs):
-                recs.append((4, "Maintain current performance — you are on a strong trajectory"))
-
-            # ── Sort by Priority & Deduplicate ────────────────────────────────
-            recs.sort(key=lambda x: x[0])
-            seen = set()
-            unique_recs: List[str] = []
-            for _, msg in recs:
-                if msg not in seen:
-                    seen.add(msg)
-                    unique_recs.append(msg)
-                if len(unique_recs) >= 6:
-                    break
-
-            # ── Expected Improvement ───────────────────────────────────────────
-            expected_improvement = self._estimate_improvement(
-                productivity, burnout_risk, attrition_risk, attendance, len(unique_recs)
-            )
+            if not recommendations:
+                recommendations = [
+                    "Continue current work patterns — performance is healthy",
+                    "Focus on consistent daily reporting for accurate analytics",
+                    "Collaborate with teammates to share knowledge and boost team scores",
+                ]
+                expected_improvement = 3
 
             result = {
-                "employeeId":          employee_id,
-                "recommendations":     unique_recs,
+                "recommendations":    recommendations,
                 "expectedImprovement": expected_improvement,
-                "priority":            "HIGH" if any(p == 1 for p, _ in recs) else
-                                       "MEDIUM" if any(p == 2 for p, _ in recs) else "LOW",
-                "recommendationCount": len(unique_recs),
             }
-
             logger.info(
-                f"[Recommendation] employeeId={employee_id} → "
-                f"{len(unique_recs)} recommendations, "
-                f"expectedImprovement={expected_improvement}%"
+                "[RecommendationEngine] %d recommendations, expectedImprovement=%d",
+                len(recommendations), expected_improvement,
             )
             return result
 
         except Exception as e:
-            logger.exception(f"[Recommendation] Generation failed: {e}")
-            raise
+            logger.exception("[RecommendationEngine] error: %s", e)
+            return {
+                "recommendations":    ["Focus on maintaining consistent work patterns"],
+                "expectedImprovement": 2,
+            }
 
-    @staticmethod
-    def _estimate_improvement(
-        productivity: float,
-        burnout: float,
-        attrition: float,
-        attendance: float,
-        rec_count: int,
-    ) -> int:
-        """
-        Estimate % productivity improvement if all recommendations are followed.
-        Based on current gaps from ideal state.
-        """
-        # Gap from ideal
-        prod_gap        = max(0, 90 - productivity)
-        burnout_penalty = burnout * 0.05       # burnout suppresses recovery
-        attend_gap      = max(0, 90 - attendance) * 0.3
 
-        potential = (prod_gap * 0.35) + (attend_gap) - (burnout_penalty * 0.1)
-        potential = max(2, min(potential, 25))  # clamp between 2–25%
-
-        # More targeted recommendations → slightly higher estimated benefit
-        potential += rec_count * 0.3
-        return round(min(potential, 25))
+# ── backward-compat function ──────────────────────────────────────────────────
+def generate_recommendations(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Result does NOT contain employeeId — route injects it."""
+    return RecommendationEngine().generate(data)
