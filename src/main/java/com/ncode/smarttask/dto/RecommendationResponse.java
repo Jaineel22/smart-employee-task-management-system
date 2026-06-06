@@ -1,46 +1,39 @@
 package com.ncode.smarttask.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import java.util.List;
+import lombok.*;
+import java.time.LocalDateTime;
 
 /**
- * DTO for Recommendation Engine response from FastAPI.
+ * AI-5: Single recommendation item.
+ * Returned by /api/recommendations/* endpoints.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RecommendationResponse {
 
-    private Integer     employeeId;
-    private List<String> recommendations;
-    private Integer     expectedImprovement;
-    private String      priority;           // HIGH | MEDIUM | LOW
-    private Integer     recommendationCount;
+    /**
+     * The recommendation text shown to the user.
+     * Example: "Your attendance dropped 12% — aim for 80%+ this month."
+     */
+    private String message;
 
-    public RecommendationResponse() {}
+    /**
+     * FOCUS | TIME_MANAGEMENT | ATTENDANCE | WORKLOAD_BALANCING |
+     * TASK_PRIORITIZATION | DEADLINE_MANAGEMENT |
+     * PRODUCTIVITY_IMPROVEMENT | SKILL_IMPROVEMENT | CONSISTENCY
+     */
+    private String category;
 
-    public static RecommendationResponse fallback(Integer employeeId) {
-        RecommendationResponse r = new RecommendationResponse();
-        r.setEmployeeId(employeeId);
-        r.setRecommendations(List.of("AI recommendations temporarily unavailable"));
-        r.setExpectedImprovement(0);
-        r.setPriority("LOW");
-        r.setRecommendationCount(1);
-        return r;
-    }
+    /** HIGH | MEDIUM | LOW */
+    private String priority;
 
-    // ── Getters & Setters ──────────────────────────────────────────────────────
+    /** 0–100 — expected impact if employee acts on this */
+    private Integer impactScore;
 
-    public Integer      getEmployeeId()                               { return employeeId; }
-    public void         setEmployeeId(Integer employeeId)             { this.employeeId = employeeId; }
+    /** 0–100 — engine confidence */
+    private Integer confidence;
 
-    public List<String> getRecommendations()                          { return recommendations; }
-    public void         setRecommendations(List<String> recs)         { this.recommendations = recs; }
-
-    public Integer      getExpectedImprovement()                      { return expectedImprovement; }
-    public void         setExpectedImprovement(Integer exp)           { this.expectedImprovement = exp; }
-
-    public String       getPriority()                                 { return priority; }
-    public void         setPriority(String priority)                  { this.priority = priority; }
-
-    public Integer      getRecommendationCount()                      { return recommendationCount; }
-    public void         setRecommendationCount(Integer count)         { this.recommendationCount = count; }
+    private LocalDateTime generatedAt;
 }

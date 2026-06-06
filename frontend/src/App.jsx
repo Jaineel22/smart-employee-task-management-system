@@ -27,7 +27,7 @@ const App = () => (
       element={
         <ProtectedRoute>
           <DashboardLayout />
-        </ProtectedRoute>
+        </ProtectedRoute >
       }
     >
       <Route index element={<Navigate to="/dashboard" replace />} />
