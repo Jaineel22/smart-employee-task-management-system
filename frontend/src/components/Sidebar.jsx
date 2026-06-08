@@ -15,7 +15,9 @@ import {
   BarChart2,
   Clock,
   Brain,
-  Activity  // ✅ ADDED Activity import
+  Activity,
+  Lightbulb,      // ✅ ADDED for AI-5 Recommendations
+  ShieldAlert     // ✅ ADDED for AI-6 Risk Analytics
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,8 +31,14 @@ const allNavItems = [
   // AI PREDICTIONS ENTRY - ADDED AFTER Analytics
   { to: '/predictions',   label: 'AI Predictions', icon: Brain,         roles: ['MANAGER', 'ADMIN'] },
 
-  // ✅ WORKFORCE INTELLIGENCE ENTRY - ADDED AFTER AI Predictions
+  // WORKFORCE INTELLIGENCE ENTRY - ADDED AFTER AI Predictions
   { to: '/workforce-intelligence', label: 'Workforce Intel', icon: Activity, roles: undefined },
+
+  // ✅ AI-5: RECOMMENDATIONS ENTRY - ADDED AFTER Workforce Intel
+  { to: '/recommendations', label: 'Recommendations', icon: Lightbulb,  roles: undefined },
+
+  // ✅ AI-6: RISK ANALYTICS ENTRY - ADDED AFTER Recommendations
+  { to: '/risk-analytics', label: 'Risk Analytics', icon: ShieldAlert,  roles: undefined },
 
   { to: '/tasks',         label: 'Tasks',        icon: CheckSquare,     roles: undefined },
   

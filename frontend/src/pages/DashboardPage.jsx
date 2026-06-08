@@ -12,6 +12,13 @@ import AttendanceWidget from '../components/AttendanceWidget';
 import InsightsCard from '../components/InsightsCard';
 import PredictionCard from '../components/PredictionCard';
 import { getAiHealth } from '../services/predictionService';
+// ✅ AI-5 & AI-6 Widget Imports
+import { 
+  MyRecommendationsWidget, 
+  MyRiskTasksWidget,
+  ManagerCriticalTasksBanner,
+  ManagerAI56SummaryCards 
+} from '../components/DashboardAI56Widgets';
 import { motion } from 'framer-motion';
 import {
   Users, FolderKanban, CheckSquare, Clock, AlertCircle,
@@ -120,10 +127,10 @@ const ManagerDashboard = ({ data, navigate }) => {
         </div>
       </div>
 
-      {/* ✅ Manager Team Insights */}
+      {/* Manager Team Insights */}
       <InsightsCard isManager={true} />
 
-      {/* ✅ AI Prediction Engine Banner for Manager */}
+      {/* AI Prediction Engine Banner for Manager */}
       <div className="bg-gradient-to-r from-violet-600 to-purple-700 rounded-2xl p-4 flex items-center justify-between">
         <div>
           <p className="text-sm font-bold text-white">AI Prediction Engine</p>
@@ -139,6 +146,12 @@ const ManagerDashboard = ({ data, navigate }) => {
           View Predictions
         </button>
       </div>
+
+      {/* ✅ AI-6: Critical Tasks Banner */}
+      <ManagerCriticalTasksBanner />
+
+      {/* ✅ AI-5 & AI-6: Manager Summary Cards */}
+      <ManagerAI56SummaryCards />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -237,7 +250,7 @@ const EmployeeDashboard = ({ data, user, navigate, tasks }) => {
       .finally(() => setProdLoading(false));
   }, [user?.id, prodMonth, prodYear]);
 
-  // ✅ AI Health Check State
+  // AI Health Check State
   const [aiOnline, setAiOnline] = useState(null);
 
   useEffect(() => {
@@ -288,7 +301,7 @@ const EmployeeDashboard = ({ data, user, navigate, tasks }) => {
         </div>
       </div>
 
-      {/* ✅ Attendance Widget + Insights side by side */}
+      {/* Attendance Widget + Insights side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AttendanceWidget />
         <InsightsCard isManager={false} />
@@ -323,12 +336,18 @@ const EmployeeDashboard = ({ data, user, navigate, tasks }) => {
         />
       </div>
 
-      {/* ✅ Prediction Card - added after ProductivityScoreCard */}
+      {/* Prediction Card - added after ProductivityScoreCard */}
       <PredictionCard
         employeeId={null}
         month={prodMonth}
         year={prodYear}
       />
+
+      {/* ✅ AI-5: My Recommendations Widget */}
+      <MyRecommendationsWidget userId={user?.id} month={prodMonth} year={prodYear} />
+
+      {/* ✅ AI-6: My Risk Tasks Widget */}
+      <MyRiskTasksWidget userId={user?.id} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

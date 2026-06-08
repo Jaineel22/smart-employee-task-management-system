@@ -13,7 +13,10 @@ import UsersPage         from './pages/UsersPage';
 import AnalyticsPage     from './pages/AnalyticsPage';
 import AttendancePage    from './pages/AttendancePage';
 import PredictionPage    from './pages/PredictionPage';
-import WorkforceIntelligencePage from './pages/WorkforceIntelligencePage'; // ✅ ADDED
+import WorkforceIntelligencePage from './pages/WorkforceIntelligencePage';
+// ✅ AI-5 & AI-6 IMPORTS
+import RecommendationsPage from './pages/RecommendationsPage';
+import RiskAnalyticsPage from './pages/RiskAnalyticsPage';
 
 const App = () => (
   <Routes>
@@ -27,7 +30,7 @@ const App = () => (
       element={
         <ProtectedRoute>
           <DashboardLayout />
-        </ProtectedRoute >
+        </ProtectedRoute>
       }
     >
       <Route index element={<Navigate to="/dashboard" replace />} />
@@ -72,12 +75,32 @@ const App = () => (
         }
       />
 
-      {/* ✅ WORKFORCE INTELLIGENCE ROUTE - All roles */}
+      {/* WORKFORCE INTELLIGENCE ROUTE - All roles */}
       <Route
         path="workforce-intelligence"
         element={
           <ProtectedRoute>
             <WorkforceIntelligencePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ✅ AI-5: RECOMMENDATIONS ROUTE - All roles */}
+      <Route
+        path="recommendations"
+        element={
+          <ProtectedRoute>
+            <RecommendationsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ✅ AI-6: RISK ANALYTICS ROUTE - All roles */}
+      <Route
+        path="risk-analytics"
+        element={
+          <ProtectedRoute>
+            <RiskAnalyticsPage />
           </ProtectedRoute>
         }
       />
