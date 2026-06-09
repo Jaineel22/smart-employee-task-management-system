@@ -8,15 +8,12 @@
 import React, { useState } from 'react';
 import {
   Card, CardContent, CardHeader, Box, Typography, Chip,
-  List, ListItem, ListItemIcon, ListItemText,
-  Avatar, Collapse, Button, Skeleton, LinearProgress,
+  Avatar, Collapse, Button, Skeleton,
 } from '@mui/material';
 import {
   Lightbulb as LightIcon,
-  CheckCircle as CheckIcon,
   KeyboardArrowDown as DownIcon,
   KeyboardArrowUp   as UpIcon,
-  TrendingUp        as ImpIcon,
 } from '@mui/icons-material';
 
 const PRIORITY_CONFIG = {
@@ -27,16 +24,15 @@ const PRIORITY_CONFIG = {
 
 export default function RecommendationCard({ data, loading }) {
 
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   if (loading) {
     return (
       <Card elevation={2} sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: 3 }}>
           <Skeleton variant="text" width="50%" height={36} />
-          {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} variant="text" width={`${60 + i * 8}%`} sx={{ mt: 1.5 }} />
-          ))}
+          <Skeleton variant="text" width="80%" height={24} sx={{ mt: 1 }} />
+          <Skeleton variant="text" width="60%" height={24} sx={{ mt: 1 }} />
         </CardContent>
       </Card>
     );
@@ -52,18 +48,32 @@ export default function RecommendationCard({ data, loading }) {
     );
   }
 
-  // Handle both legacy and structured recommendation formats
-  const isStructured = data.recommendations && Array.isArray(data.recommendations) && data.recommendations.length > 0 && data.recommendations[0].message;
+  // The data object itself is the recommendation (single item)
+  const message = data.message;
+  const category = data.category;
+  const priority = data.priority || 'LOW';
+  const impactScore = data.impactScore;
+  const confidence = data.confidence;
+  const generatedAt = data.generatedAt;
   
-  const priority = data.priority || data.overallPriority || 'LOW';
   const config = PRIORITY_CONFIG[priority] || PRIORITY_CONFIG.LOW;
-  
-  // For structured recommendations
-  const structuredRecs = isStructured ? data.recommendations : [];
-  // For legacy recommendations (array of strings)
-  const legacyRecs = !isStructured && data.recommendations ? data.recommendations : [];
-  const recs = legacyRecs;
-  const improvement = data.expectedImprovement ?? 0;
+
+  // Get color for priority badge
+  const getPriorityColor = () => {
+    switch (priority) {
+      case 'HIGH': return '#ef4444';
+      case 'MEDIUM': return '#f97316';
+      default: return '#22c55e';
+    }
+  };
+
+  const getPriorityBg = () => {
+    switch (priority) {
+      case 'HIGH': return '#fef2f2';
+      case 'MEDIUM': return '#fff7ed';
+      default: return '#f0fdf4';
+    }
+  };
 
   return (
     <Card
@@ -80,184 +90,120 @@ export default function RecommendationCard({ data, loading }) {
             <LightIcon sx={{ color: config.color, fontSize: 26 }} />
           </Avatar>
         }
-        title={<Typography variant="h6" fontWeight={700}>AI Recommendations</Typography>}
-        subheader={`${isStructured ? structuredRecs.length : recs.length} personalized actions for Employee #${data.employeeId}`}
-        action={
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1, mr: 1 }}>
+        title={<Typography variant="h6" fontWeight={700}>AI Recommendation</Typography>}
+        subheader={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
             <Chip
               label={config.label}
               size="small"
               sx={{ bgcolor: config.bg, color: config.color, fontWeight: 700, border: `1px solid ${config.color}` }}
             />
-            <Button
-              size="small"
-              onClick={() => setExpanded(!expanded)}
-              endIcon={expanded ? <UpIcon /> : <DownIcon />}
-              sx={{ textTransform: 'none' }}
-            >
-              {expanded ? 'Collapse' : 'Expand'}
-            </Button>
+            {category && (
+              <Chip
+                label={category.replace(/_/g, ' ')}
+                size="small"
+                sx={{ bgcolor: '#f3f4f6', color: '#6b7280' }}
+              />
+            )}
           </Box>
+        }
+        action={
+          <Button
+            size="small"
+            onClick={() => setExpanded(!expanded)}
+            endIcon={expanded ? <UpIcon /> : <DownIcon />}
+            sx={{ textTransform: 'none', mt: 1 }}
+          >
+            {expanded ? 'Hide Details' : 'Show Details'}
+          </Button>
         }
         sx={{ pb: 1 }}
       />
 
       <CardContent sx={{ pt: 0 }}>
 
-        {/* ── Expected Improvement Banner ────────────────────────────────── */}
-        {!isStructured && (
-          <Box
-            sx={{
-              display: 'flex', alignItems: 'center', gap: 2,
-              p: 2, borderRadius: 2,
-              bgcolor: improvement > 0 ? '#f0fdf4' : '#f9fafb',
-              mb: 2,
-            }}
-          >
-            <ImpIcon sx={{ color: improvement > 0 ? '#22c55e' : '#9ca3af' }} />
+        {/* Recommendation Message */}
+        <Box
+          sx={{
+            p: 2.5,
+            borderRadius: 2,
+            bgcolor: '#f8fafc',
+            mb: 2,
+            border: '1px solid #e2e8f0',
+          }}
+        >
+          <Typography variant="body1" color="text.primary" sx={{ fontWeight: 500, lineHeight: 1.5 }}>
+            {message}
+          </Typography>
+        </Box>
+
+        {/* Stats chips */}
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+          {impactScore && (
             <Box>
-              <Typography variant="body2" fontWeight={600} color="text.primary">
-                Expected Productivity Improvement
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '10px' }}>
+                Impact Score
               </Typography>
-              <Typography variant="caption" color="text.secondary">
-                If all recommendations are followed consistently
+              <Typography variant="h6" fontWeight={700} sx={{ color: getPriorityColor() }}>
+                {impactScore}
               </Typography>
             </Box>
-            <Typography variant="h5" fontWeight={900} color={improvement > 0 ? '#22c55e' : '#9ca3af'} sx={{ ml: 'auto' }}>
-              +{improvement}%
-            </Typography>
-          </Box>
-        )}
-
-        {/* ── Improvement Progress ───────────────────────────────────────── */}
-        {!isStructured && (
-          <LinearProgress
-            variant="determinate"
-            value={Math.min(improvement * 4, 100)}
-            sx={{
-              height: 6,
-              borderRadius: 3,
-              mb: 3,
-              bgcolor: '#f0fdf4',
-              '& .MuiLinearProgress-bar': { bgcolor: '#22c55e', borderRadius: 3 },
-            }}
-          />
-        )}
-
-        {/* ── Recommendation List ────────────────────────────────────────── */}
-        <Collapse in={expanded} timeout="auto" unmountOnExit>
-          {isStructured ? (
-            // Structured recommendations with message, category, priority, etc.
-            <List disablePadding>
-              {structuredRecs.map((rec, i) => (
-                <ListItem
-                  key={i}
-                  disableGutters
-                  sx={{
-                    py: 1.2,
-                    px: 2,
-                    mb: 1,
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    alignItems: 'flex-start',
-                    transition: 'background 0.15s',
-                    flexDirection: 'column',
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
-                >
-                  <Box sx={{ display: 'flex', width: '100%', alignItems: 'flex-start' }}>
-                    <ListItemIcon sx={{ minWidth: 36, mt: 0.3 }}>
-                      <Avatar sx={{ width: 24, height: 24, bgcolor: `${config.color}15`, fontSize: 11 }}>
-                        <Typography variant="caption" fontWeight={800} color={config.color}>
-                          {i + 1}
-                        </Typography>
-                      </Avatar>
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={rec.message}
-                      primaryTypographyProps={{ variant: 'body2', color: 'text.primary', lineHeight: 1.5 }}
-                    />
-                    <CheckIcon sx={{ color: 'divider', fontSize: 18, mt: 0.3, ml: 1 }} />
-                  </Box>
-                  
-                  {/* Recommendation metadata badges */}
-                  <Box sx={{ display: 'flex', gap: 1, ml: 6, mt: 1, flexWrap: 'wrap' }}>
-                    <Chip
-                      label={rec.priority}
-                      size="small"
-                      sx={{
-                        height: 20,
-                        fontSize: '10px',
-                        bgcolor: rec.priority === 'HIGH' ? '#fef2f2' : rec.priority === 'MEDIUM' ? '#fff7ed' : '#f0fdf4',
-                        color: rec.priority === 'HIGH' ? '#ef4444' : rec.priority === 'MEDIUM' ? '#f97316' : '#22c55e',
-                        fontWeight: 600,
-                      }}
-                    />
-                    <Chip
-                      label={rec.category?.replace(/_/g, ' ')}
-                      size="small"
-                      sx={{ height: 20, fontSize: '10px', bgcolor: '#f3f4f6', color: '#6b7280' }}
-                    />
-                    {rec.impactScore && (
-                      <Chip
-                        label={`Impact: ${rec.impactScore}`}
-                        size="small"
-                        sx={{ height: 20, fontSize: '10px', bgcolor: '#e0e7ff', color: '#4338ca' }}
-                      />
-                    )}
-                    {rec.confidence && (
-                      <Chip
-                        label={`Confidence: ${rec.confidence}%`}
-                        size="small"
-                        sx={{ height: 20, fontSize: '10px', bgcolor: '#dcfce7', color: '#166534' }}
-                      />
-                    )}
-                  </Box>
-                </ListItem>
-              ))}
-            </List>
-          ) : (
-            // Legacy recommendations (simple strings)
-            <List disablePadding>
-              {recs.map((rec, i) => (
-                <ListItem
-                  key={i}
-                  disableGutters
-                  sx={{
-                    py: 1.2,
-                    px: 2,
-                    mb: 1,
-                    borderRadius: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    alignItems: 'flex-start',
-                    transition: 'background 0.15s',
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 36, mt: 0.3 }}>
-                    <Avatar sx={{ width: 24, height: 24, bgcolor: `${config.color}15`, fontSize: 11 }}>
-                      <Typography variant="caption" fontWeight={800} color={config.color}>
-                        {i + 1}
-                      </Typography>
-                    </Avatar>
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={rec}
-                    primaryTypographyProps={{ variant: 'body2', color: 'text.primary', lineHeight: 1.5 }}
-                  />
-                  <CheckIcon sx={{ color: 'divider', fontSize: 18, mt: 0.3, ml: 1 }} />
-                </ListItem>
-              ))}
-            </List>
           )}
+          {confidence && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '10px' }}>
+                Confidence
+              </Typography>
+              <Typography variant="h6" fontWeight={700} sx={{ color: '#3b82f6' }}>
+                {confidence}%
+              </Typography>
+            </Box>
+          )}
+          {priority && (
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '10px' }}>
+                Priority Level
+              </Typography>
+              <Typography variant="h6" fontWeight={700} sx={{ color: getPriorityColor() }}>
+                {priority}
+              </Typography>
+            </Box>
+          )}
+        </Box>
+
+        {/* Expandable details section */}
+        <Collapse in={expanded} timeout="auto" unmountOnExit>
+          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              Why this recommendation?
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              This recommendation is generated based on your current performance metrics, 
+              including productivity score, attendance rate, task completion, and workload analysis.
+            </Typography>
+            
+            <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              What you can do:
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              • Review your current tasks and prioritize accordingly<br />
+              • Update your daily work reports with detailed activities<br />
+              • Communicate any blockers to your manager<br />
+              • Track your progress regularly
+            </Typography>
+
+            {generatedAt && (
+              <Typography variant="caption" color="text.disabled" display="block" sx={{ mt: 1 }}>
+                Generated: {new Date(generatedAt).toLocaleString()}
+              </Typography>
+            )}
+          </Box>
         </Collapse>
 
-        {/* ── Footer ────────────────────────────────────────────────────── */}
+        {/* Footer */}
         <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
           <Typography variant="caption" color="text.disabled">
-            🤖 Generated by AI Recommendation Engine • Based on real-time metrics
+            🤖 Powered by AI Recommendation Engine • Based on real-time metrics
           </Typography>
         </Box>
 

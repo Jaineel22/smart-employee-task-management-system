@@ -100,7 +100,7 @@ const EmployeeRow = ({ emp, index }) => {
                 <p className="text-xs text-slate-400 text-center py-4">No recommendations generated</p>
               ) : (
                 emp.recommendations.map((rec, i) => (
-                  <RecommendationCard key={i} recommendation={rec} index={i} />
+                  <RecommendationCard key={i} data={rec} loading={false} />
                 ))
               )}
             </div>
@@ -127,22 +127,36 @@ const RecommendationsPage = () => {
   const [view,    setView]    = useState('team'); // 'team' | 'mine'
 
   const fetchData = useCallback(async () => {
+    console.log("🔵 fetchData called - isManager:", isManager, "view:", view, "month:", month, "year:", year);
     setLoading(true);
     setError('');
     try {
+      let result;
       if (isManager && view === 'team') {
-        setData(await getTeamRecommendations(month, year));
+        console.log("📤 Calling getTeamRecommendations with month:", month, "year:", year);
+        result = await getTeamRecommendations(month, year);
+        console.log("✅ Team recommendations received:", result);
+        console.log("📊 Team recommendations count:", result?.teamRecommendations?.length);
       } else {
-        setData(await getMyRecommendations(month, year));
+        console.log("📤 Calling getMyRecommendations with month:", month, "year:", year);
+        result = await getMyRecommendations(month, year);
+        console.log("✅ My recommendations received:", result);
+        console.log("📊 Recommendations count:", result?.recommendations?.length);
       }
+      setData(result);
     } catch (err) {
+      console.error("❌ Error fetching recommendations:", err);
+      console.error("Error details:", err.response?.data);
       setError(err.response?.data?.message || 'Failed to load recommendations.');
     } finally {
       setLoading(false);
     }
   }, [isManager, view, month, year]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { 
+    console.log("🟢 useEffect triggered - calling fetchData");
+    fetchData(); 
+  }, [fetchData]);
 
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -267,7 +281,7 @@ const RecommendationsPage = () => {
               </div>
             ) : (
               data.recommendations.map((rec, i) => (
-                <RecommendationCard key={i} recommendation={rec} index={i} />
+                <RecommendationCard key={i} data={rec} loading={false} />
               ))
             )}
           </div>
@@ -293,7 +307,7 @@ const RecommendationsPage = () => {
               </p>
               <div className="space-y-2">
                 {data.teamRecommendations.map((rec, i) => (
-                  <RecommendationCard key={i} recommendation={rec} index={i} />
+                  <RecommendationCard key={i} data={rec} loading={false} />
                 ))}
               </div>
             </div>

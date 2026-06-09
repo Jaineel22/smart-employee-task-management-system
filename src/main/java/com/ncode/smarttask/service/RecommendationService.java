@@ -166,6 +166,17 @@ public class RecommendationService {
     private List<RecommendationResponse> generateEmployeeRecommendations(EmployeeMetrics m) {
         List<RecommendationResponse> recs = new ArrayList<>();
 
+        // ✅ FIXED: Always add at least 2 default recommendations
+        recs.add(rec(
+                "Based on your current performance, focus on completing pending tasks before taking new assignments",
+                "FOCUS", "MEDIUM", 65, 78
+        ));
+        
+        recs.add(rec(
+                "Submit daily work reports consistently to improve tracking accuracy",
+                "CONSISTENCY", "MEDIUM", 55, 75
+        ));
+
         // ── ATTENDANCE ────────────────────────────────────────────────────────
         if (m.attendancePct < 65) {
             recs.add(rec("Your attendance is critically low (" + fmt(m.attendancePct) + "%) — "
@@ -260,12 +271,23 @@ public class RecommendationService {
             }
         }
 
+        // ✅ Remove duplicates by message
+        List<RecommendationResponse> unique = new ArrayList<>();
+        Set<String> messages = new HashSet<>();
+        for (RecommendationResponse rec : recs) {
+            if (!messages.contains(rec.getMessage())) {
+                messages.add(rec.getMessage());
+                unique.add(rec);
+            }
+        }
+
         // Sort: HIGH first, then MEDIUM, then LOW — then by impactScore desc
-        recs.sort(Comparator
+        unique.sort(Comparator
                 .comparingInt((RecommendationResponse r) -> priorityOrdinal(r.getPriority()))
                 .thenComparingInt(r -> -(r.getImpactScore() != null ? r.getImpactScore() : 0)));
 
-        return recs;
+        // Limit to top 6 recommendations
+        return unique.subList(0, Math.min(6, unique.size()));
     }
 
     // ════════════════════════════════════════════════════════════════════════
@@ -276,6 +298,12 @@ public class RecommendationService {
             TeamMetrics m, List<EmployeeRecommendationResponse> breakdown) {
 
         List<RecommendationResponse> recs = new ArrayList<>();
+
+        // Add default team recommendations
+        recs.add(rec(
+                "Review team workload distribution to ensure balanced assignments",
+                "WORKLOAD_BALANCING", "MEDIUM", 70, 80
+        ));
 
         if (m.avgProductivity < 55) {
             recs.add(rec("Team productivity critically low (" + fmt(m.avgProductivity) + "%) — "
@@ -333,11 +361,21 @@ public class RecommendationService {
                     "WORKLOAD_BALANCING", "MEDIUM", 78, 81));
         }
 
-        recs.sort(Comparator
+        // Remove duplicates
+        List<RecommendationResponse> unique = new ArrayList<>();
+        Set<String> messages = new HashSet<>();
+        for (RecommendationResponse rec : recs) {
+            if (!messages.contains(rec.getMessage())) {
+                messages.add(rec.getMessage());
+                unique.add(rec);
+            }
+        }
+
+        unique.sort(Comparator
                 .comparingInt((RecommendationResponse r) -> priorityOrdinal(r.getPriority()))
                 .thenComparingInt(r -> -(r.getImpactScore() != null ? r.getImpactScore() : 0)));
 
-        return recs;
+        return unique.subList(0, Math.min(8, unique.size()));
     }
 
     // ════════════════════════════════════════════════════════════════════════
