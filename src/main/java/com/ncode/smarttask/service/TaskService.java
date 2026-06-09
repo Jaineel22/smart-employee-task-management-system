@@ -16,23 +16,32 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * TaskService — extended to recognise PAUSED and BLOCKED status transitions.
+ *
+ * All existing methods are preserved with identical signatures.
+ * updateTaskProgress now handles PAUSED/BLOCKED without auto-completing.
+ *
+ * Note: actual pause/resume business logic (creating TaskInterruption records)
+ * lives in TaskInterruptionService. TaskService only updates the status field.
+ */
 @Service
 @RequiredArgsConstructor
 public class TaskService {
 
-    private final TaskRepository taskRepository;
-    private final UserRepository userRepository;
+    private final TaskRepository    taskRepository;
+    private final UserRepository    userRepository;
     private final ProjectRepository projectRepository;
+
+    // ── EXISTING METHODS (unchanged) ─────────────────────────────────────────
 
     public Task createTask(CreateTaskRequest request) {
         User assignedTo = userRepository.findById(request.getAssignedToId())
-                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + request.getAssignedToId()));
-
+                .orElseThrow(() -> new RuntimeException("Employee not found: " + request.getAssignedToId()));
         User assignedBy = userRepository.findById(request.getAssignedById())
-                .orElseThrow(() -> new RuntimeException("Manager not found with id: " + request.getAssignedById()));
-
+                .orElseThrow(() -> new RuntimeException("Manager not found: " + request.getAssignedById()));
         Project project = projectRepository.findById(request.getProjectId())
-                .orElseThrow(() -> new RuntimeException("Project not found with id: " + request.getProjectId()));
+                .orElseThrow(() -> new RuntimeException("Project not found: " + request.getProjectId()));
 
         Task task = Task.builder()
                 .title(request.getTitle())
@@ -55,7 +64,7 @@ public class TaskService {
 
     public Task getTaskById(Long id) {
         return taskRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+                .orElseThrow(() -> new RuntimeException("Task not found: " + id));
     }
 
     public List<Task> getTasksByEmployee(Long employeeId) {
@@ -68,7 +77,6 @@ public class TaskService {
 
     public Task updateTask(Long id, UpdateTaskRequest request) {
         Task task = getTaskById(id);
-
         if (request.getTitle() != null) {
             task.setTitle(request.getTitle());
         }
@@ -81,7 +89,6 @@ public class TaskService {
         if (request.getDeadline() != null) {
             task.setDeadline(request.getDeadline());
         }
-
         return taskRepository.save(task);
     }
 
@@ -89,7 +96,18 @@ public class TaskService {
         Task task = getTaskById(id);
 
         if (request.getTaskStatus() != null) {
-            task.setStatus(request.getTaskStatus());
+            TaskStatus newStatus = request.getTaskStatus();
+
+            // ── PAUSED / BLOCKED: no auto-complete logic ─────────────────
+            // Business logic for interruption record creation is handled
+            // by TaskInterruptionService.pauseTask() / resumeTask().
+            // This method only updates the status column.
+            if (newStatus == TaskStatus.PAUSED || newStatus == TaskStatus.BLOCKED) {
+                task.setStatus(newStatus);
+                return taskRepository.save(task);
+            }
+
+            task.setStatus(newStatus);
         }
 
         if (request.getCompletionPercentage() != null) {
@@ -99,24 +117,23 @@ public class TaskService {
             }
             task.setCompletionPercentage(pct);
 
-            // Auto-complete task if percentage reaches 100
+            // Auto-complete at 100%
             if (pct == 100) {
                 task.setStatus(TaskStatus.COMPLETED);
-                if(task.getCompletedAt() == null){
+                if (task.getCompletedAt() == null) {
                     task.setCompletedAt(LocalDateTime.now());
                 }
             }
+        }
 
-            if(request.getTaskStatus() == TaskStatus.COMPLETED && task.getCompletedAt() == null){
-                 task.setCompletedAt(LocalDateTime.now());
-            }
+        if (request.getTaskStatus() == TaskStatus.COMPLETED && task.getCompletedAt() == null) {
+            task.setCompletedAt(LocalDateTime.now());
         }
 
         return taskRepository.save(task);
     }
 
     public void deleteTask(Long id) {
-        Task task = getTaskById(id);
-        taskRepository.delete(task);
+        taskRepository.delete(getTaskById(id));
     }
 }

@@ -17,7 +17,9 @@ import {
   Brain,
   Activity,
   Lightbulb,      // ✅ ADDED for AI-5 Recommendations
-  ShieldAlert     // ✅ ADDED for AI-6 Risk Analytics
+  ShieldAlert,    // ✅ ADDED for AI-6 Risk Analytics
+  BarChart3,      // ✅ ADDED for Activity Intelligence
+  PauseCircle     // ✅ ADDED for Task Interruptions
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -34,11 +36,17 @@ const allNavItems = [
   // WORKFORCE INTELLIGENCE ENTRY - ADDED AFTER AI Predictions
   { to: '/workforce-intelligence', label: 'Workforce Intel', icon: Activity, roles: undefined },
 
-  // ✅ AI-5: RECOMMENDATIONS ENTRY - ADDED AFTER Workforce Intel
+  // AI-5: RECOMMENDATIONS ENTRY - ADDED AFTER Workforce Intel
   { to: '/recommendations', label: 'Recommendations', icon: Lightbulb,  roles: undefined },
 
-  // ✅ AI-6: RISK ANALYTICS ENTRY - ADDED AFTER Recommendations
+  // AI-6: RISK ANALYTICS ENTRY - ADDED AFTER Recommendations
   { to: '/risk-analytics', label: 'Risk Analytics', icon: ShieldAlert,  roles: undefined },
+
+  // ✅ FEATURE 1: ACTIVITY INTELLIGENCE - MANAGER/ADMIN only
+  { to: '/activity-intelligence', label: 'Activity Intel', icon: BarChart3, roles: ['MANAGER', 'ADMIN'] },
+
+  // ✅ FEATURE 2: TASK INTERRUPTIONS - All roles
+  { to: '/task-interruptions', label: 'Task Interruptions', icon: PauseCircle, roles: undefined },
 
   { to: '/tasks',         label: 'Tasks',        icon: CheckSquare,     roles: undefined },
   

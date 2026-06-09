@@ -17,6 +17,9 @@ import WorkforceIntelligencePage from './pages/WorkforceIntelligencePage';
 // ✅ AI-5 & AI-6 IMPORTS
 import RecommendationsPage from './pages/RecommendationsPage';
 import RiskAnalyticsPage from './pages/RiskAnalyticsPage';
+// ✅ FEATURE 1 & 2 IMPORTS
+import ActivityIntelligencePage from './pages/ActivityIntelligencePage';
+import TaskInterruptionPage from './pages/TaskInterruptionPage';
 
 const App = () => (
   <Routes>
@@ -85,7 +88,7 @@ const App = () => (
         }
       />
 
-      {/* ✅ AI-5: RECOMMENDATIONS ROUTE - All roles */}
+      {/* AI-5: RECOMMENDATIONS ROUTE - All roles */}
       <Route
         path="recommendations"
         element={
@@ -95,12 +98,32 @@ const App = () => (
         }
       />
 
-      {/* ✅ AI-6: RISK ANALYTICS ROUTE - All roles */}
+      {/* AI-6: RISK ANALYTICS ROUTE - All roles */}
       <Route
         path="risk-analytics"
         element={
           <ProtectedRoute>
             <RiskAnalyticsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ✅ FEATURE 1: ACTIVITY INTELLIGENCE - MANAGER/ADMIN only */}
+      <Route
+        path="activity-intelligence"
+        element={
+          <RoleProtectedRoute roles={['MANAGER', 'ADMIN']}>
+            <ActivityIntelligencePage />
+          </RoleProtectedRoute>
+        }
+      />
+
+      {/* ✅ FEATURE 2: TASK INTERRUPTIONS - All roles */}
+      <Route
+        path="task-interruptions"
+        element={
+          <ProtectedRoute>
+            <TaskInterruptionPage />
           </ProtectedRoute>
         }
       />
