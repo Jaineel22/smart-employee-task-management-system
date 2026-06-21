@@ -19,7 +19,7 @@ const formatDate = (v) => {
     return new Date(v).toLocaleDateString('en-IN', { day:'2-digit', month:'short' });
   } catch { return ''; }
 };
-
+ 
 const NotificationsPage = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
