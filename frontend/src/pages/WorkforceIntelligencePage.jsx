@@ -1,12 +1,3 @@
-/**
- * WorkforceIntelligencePage.jsx
- * 
- * Main page for AI-4 Workforce Analytics & Productivity Intelligence.
- * Renders different views based on user role:
- *   - MANAGER → Team Health, Team Burnout, Team Attrition, Risk Overview
- *   - EMPLOYEE → Personal Burnout, Attrition, Forecast, Recommendations
- */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Container, Grid, Typography, Alert, Tabs, Tab,
