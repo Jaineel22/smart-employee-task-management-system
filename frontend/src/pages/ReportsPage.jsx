@@ -1,7 +1,3 @@
-// src/pages/ReportsPage.jsx
-// Feature 1: Activity Intelligence — enhanced report submission form.
-// All existing functionality preserved. New fields added to the modal form.
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
