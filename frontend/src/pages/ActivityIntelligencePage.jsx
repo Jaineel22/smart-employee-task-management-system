@@ -1,6 +1,3 @@
-// src/pages/ActivityIntelligencePage.jsx
-// Feature 1: Activity Intelligence Dashboard — manager view
-
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

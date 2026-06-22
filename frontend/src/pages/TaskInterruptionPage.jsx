@@ -1,6 +1,3 @@
-// src/pages/TaskInterruptionPage.jsx
-// Feature 2: Task Pause/Resume — employee + manager view
-
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
