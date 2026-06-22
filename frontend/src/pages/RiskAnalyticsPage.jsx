@@ -1,6 +1,3 @@
-// src/pages/RiskAnalyticsPage.jsx
-// AI-6: Deadline Risk Prediction — Employee + Manager view
-
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
