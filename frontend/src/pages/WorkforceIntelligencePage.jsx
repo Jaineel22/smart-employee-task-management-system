@@ -10,7 +10,7 @@ import {
   TrendingUp as TrendingUpIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
-import { useAuth } from '../context/AuthContext'; // ✅ Use your existing AuthContext
+import { useAuth } from '../context/AuthContext'; 
 import axios from 'axios';
 
 import BurnoutCard from '../components/workforce/BurnoutCard';
@@ -18,7 +18,6 @@ import AttritionCard from '../components/workforce/AttritionCard';
 import TeamHealthCard from '../components/workforce/TeamHealthCard';
 import GrowthForecastCard from '../components/workforce/GrowthForecastCard';
 import RecommendationCard from '../components/workforce/RecommendationCard';
-
 // ── Constants ──────────────────────────────────────────────────────────────────
 const API_BASE = 'http://localhost:8080/api/ai';
 
