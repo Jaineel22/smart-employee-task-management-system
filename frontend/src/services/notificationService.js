@@ -1,4 +1,3 @@
-// empty file
 import api from './api';
 
 export const getNotificationsByUser = async (id) => (await api.get(`/notifications/user/${id}`)).data;

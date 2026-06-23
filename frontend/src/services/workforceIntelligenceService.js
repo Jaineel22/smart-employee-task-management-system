@@ -1,12 +1,6 @@
 import api from './api';
 
 /**
- * workforceIntelligenceService.js
- * ================================
- * Service for AI-4 workforce intelligence features.
- */
-
-/**
  * Get burnout risk for the current employee
  * @param {number} month - Month (1-12)
  * @param {number} year - Year
