@@ -1,4 +1,3 @@
-// empty file
 import api from './api';
 
 export const getAdminDashboard = async () => {
